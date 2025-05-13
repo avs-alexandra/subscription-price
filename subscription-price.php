@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subscription price
  * Plugin URI: https://example.com
- * Description: Плагин добавляет вкладку "Подписка" в настройки WooCommerce для управления ролями пользователей в зависимости от их подписки.
+ * Description: Плагин добавляет вкладку "Подписка" в настройки WooCommerce для управления ролями пользователей в зависимости от подписки.
  * Version: 1.0.0
  * Author: avs-alexandra
  * Author URI: https://example.com
@@ -14,9 +14,12 @@ if (!defined('ABSPATH')) {
     exit; // Запрет прямого доступа
 }
 
+// Подключаем файл класса настроек
+require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-settings.php';
+
 class SubscriptionPrice {
     public function __construct() {
-        // Инициализация настроек
+        // Добавляем страницу настроек в WooCommerce
         add_filter('woocommerce_get_settings_pages', [$this, 'add_subscription_tab']);
         // Обработка активации подписки при покупке
         add_action('woocommerce_order_status_completed', [$this, 'handle_subscription_activation']);
@@ -28,8 +31,7 @@ class SubscriptionPrice {
      * Добавить вкладку "Подписка" в настройки WooCommerce
      */
     public function add_subscription_tab($settings) {
-        require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-settings.php';
-        $settings[] = new Subscription_Settings();
+        $settings[] = new Subscription_Settings(); // Экземпляр класса настроек
         return $settings;
     }
 
@@ -40,7 +42,7 @@ class SubscriptionPrice {
         $order = wc_get_order($order_id);
 
         if (!$order) {
-            return; // Если заказ не найден, выход
+            return; // Если заказ не найден, выходим
         }
 
         foreach ($order->get_items() as $item) {
