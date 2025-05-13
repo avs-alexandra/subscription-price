@@ -94,16 +94,14 @@ class SubscriptionPrice {
             $user->set_role($plan['role_active']);
             error_log("Role '{$plan['role_active']}' assigned to user ID $user_id.");
 
-            // Добавляем активную подписку в мета-данные пользователя
-            $active_subscriptions = get_user_meta($user_id, 'active_subscriptions', true);
-            if (empty($active_subscriptions)) {
-                $active_subscriptions = [];
-            }
+            // Удаляем текущие активные подписки
+            delete_user_meta($user_id, 'active_subscriptions');
 
             $current_time = time();
             $duration = $this->calculate_duration($plan['duration']);
 
-            $active_subscriptions[] = [
+            // Добавляем новую подписку в мета-данные пользователя
+            $new_subscription = [
                 'id' => $current_time, // Уникальный ID подписки
                 'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
                 'start_date' => $current_time, // Текущая дата как дата начала
@@ -111,7 +109,7 @@ class SubscriptionPrice {
                 'expiration' => $current_time + $duration, // Для совместимости с текущей логикой
             ];
 
-            update_user_meta($user_id, 'active_subscriptions', $active_subscriptions);
+            update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
 
             // Планировщик завершения подписки
             if ($duration) {
