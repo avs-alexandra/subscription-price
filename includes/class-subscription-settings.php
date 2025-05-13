@@ -1,150 +1,113 @@
 <?php
-if (!defined('ABSPATH')) {
-    exit; // Запрет прямого доступа
-}
+if (!defined('ABSPATH')) exit; // Запрет прямого доступа
 
-class Subscription_Settings extends WC_Settings_Page {
+class SubscriptionSettingsPage {
     public function __construct() {
-        $this->id    = 'subscription'; // ID вкладки
-        $this->label = __('Подписка', 'subscription-price'); // Заголовок вкладки
-
-        add_filter('woocommerce_settings_tabs_array', [$this, 'add_settings_tab'], 50);
-        add_action("woocommerce_settings_{$this->id}", [$this, 'output_settings']);
-        add_action("woocommerce_update_options_{$this->id}", [$this, 'save_settings']);
+        // Добавляем страницу настроек в меню "Маркетинг"
+        add_action('admin_menu', [$this, 'add_settings_page']);
+        // Регистрируем настройки
+        add_action('admin_init', [$this, 'register_settings']);
     }
 
     /**
-     * Добавить вкладку в настройки WooCommerce
+     * Добавляем страницу настроек в меню "Маркетинг"
      */
-    public function add_settings_tab($settings_tabs) {
-        $settings_tabs[$this->id] = $this->label;
-        return $settings_tabs;
+    public function add_settings_page() {
+        add_submenu_page(
+            'woocommerce-marketing', // Родительская страница (WooCommerce > Маркетинг)
+            __('Настройки подписки', 'subscription-price'), // Заголовок страницы
+            __('Подписка', 'subscription-price'), // Название в меню
+            'manage_woocommerce', // Требуемые права
+            'subscription-settings', // Слаг страницы
+            [$this, 'render_settings_page'] // Callback для рендеринга страницы
+        );
     }
 
     /**
-     * Вывод настроек
+     * Регистрируем настройки
      */
-    public function output_settings() {
-        ?>
-        <h2><?php _e('Настройки подписки', 'subscription-price'); ?></h2>
-        <form method="post" action="">
-            <?php wp_nonce_field('save_subscription_settings', 'woocommerce_subscription_nonce'); ?>
-            <table class="form-table">
-                <?php for ($i = 1; $i <= 4; $i++): ?>
-                    <tr>
-                        <th scope="row">
-                            <label><?php printf(__('Подписка %d', 'subscription-price'), $i); ?></label>
-                        </th>
-                        <td>
-                            <label><?php _e('Выберите товар:', 'subscription-price'); ?></label>
-                            <select id="product_<?php echo $i; ?>" name="product_<?php echo $i; ?>" class="wc-product-search" style="width: 50%;" data-placeholder="<?php esc_attr_e('Введите название товара...', 'subscription-price'); ?>" data-action="woocommerce_json_search_products_and_variations">
-                                <?php
-                                $product_id = get_option("subscription_{$i}_product", '');
-                                if ($product_id) {
-                                    $product = wc_get_product($product_id);
-                                    if ($product) {
-                                        echo '<option value="' . esc_attr($product_id) . '" selected="selected">' . esc_html($product->get_name()) . '</option>';
-                                    }
-                                }
-                                ?>
-                            </select>
-                            <br><br>
-                            <label><?php _e('Длительность подписки:', 'subscription-price'); ?></label><br>
-                            <input type="number" name="duration_<?php echo $i; ?>_years" placeholder="<?php esc_attr_e('Годы', 'subscription-price'); ?>" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_years", 0)); ?>"> <?php _e('год', 'subscription-price'); ?>
-                            <input type="number" name="duration_<?php echo $i; ?>_months" placeholder="<?php esc_attr_e('Месяцы', 'subscription-price'); ?>" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_months", 0)); ?>"> <?php _e('мес.', 'subscription-price'); ?>
-                            <input type="number" name="duration_<?php echo $i; ?>_days" placeholder="<?php esc_attr_e('Дни', 'subscription-price'); ?>" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_days", 0)); ?>"> <?php _e('дни', 'subscription-price'); ?>
-                            <input type="number" name="duration_<?php echo $i; ?>_hours" placeholder="<?php esc_attr_e('Часы', 'subscription-price'); ?>" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_hours", 0)); ?>"> <?php _e('часы', 'subscription-price'); ?>
-                            <input type="number" name="duration_<?php echo $i; ?>_minutes" placeholder="<?php esc_attr_e('Минуты', 'subscription-price'); ?>" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_minutes", 0)); ?>"> <?php _e('мин.', 'subscription-price'); ?>
-                        </td>
-                    </tr>
-                <?php endfor; ?>
-                <tr>
-                    <th scope="row">
-                        <label for="role_active"><?php _e('Роль при активной подписке', 'subscription-price'); ?></label>
-                    </th>
-                    <td>
-                        <select id="role_active" name="role_active" required>
-                            <?php foreach ($this->get_roles() as $role_key => $role_name): ?>
-                                <option value="<?php echo esc_attr($role_key); ?>" <?php selected(get_option('subscription_role_active'), $role_key); ?>>
-                                    <?php echo esc_html($role_name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">
-                        <label for="role_expired"><?php _e('Роль после завершения подписки', 'subscription-price'); ?></label>
-                    </th>
-                    <td>
-                        <select id="role_expired" name="role_expired" required>
-                            <?php foreach ($this->get_roles() as $role_key => $role_name): ?>
-                                <option value="<?php echo esc_attr($role_key); ?>" <?php selected(get_option('subscription_role_expired'), $role_key); ?>>
-                                    <?php echo esc_html($role_name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </td>
-                </tr>
-            </table>
-            <p class="submit">
-                <button type="submit" class="button-primary"><?php _e('Сохранить изменения', 'subscription-price'); ?></button>
-            </p>
-        </form>
-        <?php
-    }
-
-    /**
-     * Сохранение настроек
-     */
-    public function save_settings() {
-        if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
-            error_log('Nonce verification failed.'); // Логирование ошибки
-            return;
-        }
-
-        error_log('Saving settings...'); // Логирование начала сохранения
+    public function register_settings() {
+        add_settings_section(
+            'subscription_settings_section',
+            __('Подписки', 'subscription-price'),
+            null,
+            'subscription-settings'
+        );
 
         for ($i = 1; $i <= 4; $i++) {
-            if (isset($_POST["product_{$i}"])) {
-                update_option("subscription_{$i}_product", absint($_POST["product_{$i}"]));
-            }
-            update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
-            update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
-            update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
-            update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
-            update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
+            register_setting('subscription_settings', "subscription_{$i}_product", [
+                'sanitize_callback' => 'sanitize_text_field',
+            ]);
+            register_setting('subscription_settings', "subscription_{$i}_duration_years", [
+                'sanitize_callback' => 'absint',
+            ]);
+            register_setting('subscription_settings', "subscription_{$i}_duration_months", [
+                'sanitize_callback' => 'absint',
+            ]);
+            register_setting('subscription_settings', "subscription_{$i}_duration_days", [
+                'sanitize_callback' => 'absint',
+            ]);
+            register_setting('subscription_settings', "subscription_{$i}_duration_hours", [
+                'sanitize_callback' => 'absint',
+            ]);
+            register_setting('subscription_settings', "subscription_{$i}_duration_minutes", [
+                'sanitize_callback' => 'absint',
+            ]);
         }
 
-        // Сохраняем роли
-        if (isset($_POST['role_active'])) {
-            update_option('subscription_role_active', sanitize_text_field($_POST['role_active']));
-        }
-
-        if (isset($_POST['role_expired'])) {
-            update_option('subscription_role_expired', sanitize_text_field($_POST['role_expired']));
-        }
-
-        error_log('Settings saved successfully.'); // Логирование успешного сохранения
+        register_setting('subscription_settings', 'subscription_role_active', [
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('subscription_settings', 'subscription_role_expired', [
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
     }
 
     /**
-     * Получить список ролей
+     * Рендеринг страницы настроек
      */
-    private function get_roles() {
-        global $wp_roles;
-
-        if (!isset($wp_roles)) {
-            $wp_roles = new WP_Roles();
-        }
-
-        $roles = $wp_roles->roles;
-        $formatted_roles = [];
-
-        foreach ($roles as $key => $role) {
-            $formatted_roles[$key] = $role['name'];
-        }
-
-        return $formatted_roles;
+    public function render_settings_page() {
+        ?>
+        <div class="wrap">
+            <h1><?php esc_html_e('Настройки подписки', 'subscription-price'); ?></h1>
+            <form method="post" action="options.php">
+                <?php settings_fields('subscription_settings'); ?>
+                <?php do_settings_sections('subscription-settings'); ?>
+                <table class="form-table">
+                    <?php for ($i = 1; $i <= 4; $i++): ?>
+                        <tr valign="top">
+                            <th scope="row"><?php printf(__('Подписка %d: Товар', 'subscription-price'), $i); ?></th>
+                            <td>
+                                <input type="text" name="subscription_<?php echo $i; ?>_product" value="<?php echo esc_attr(get_option("subscription_{$i}_product", '')); ?>" class="regular-text" />
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><?php printf(__('Подписка %d: Длительность (Годы/Месяцы/Дни/Часы/Минуты)', 'subscription-price'), $i); ?></th>
+                            <td>
+                                <input type="number" name="subscription_<?php echo $i; ?>_duration_years" placeholder="<?php esc_attr_e('Годы', 'subscription-price'); ?>" min="0" style="width: 80px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_years", 0)); ?>"> 
+                                <input type="number" name="subscription_<?php echo $i; ?>_duration_months" placeholder="<?php esc_attr_e('Месяцы', 'subscription-price'); ?>" min="0" style="width: 80px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_months", 0)); ?>"> 
+                                <input type="number" name="subscription_<?php echo $i; ?>_duration_days" placeholder="<?php esc_attr_e('Дни', 'subscription-price'); ?>" min="0" style="width: 80px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_days", 0)); ?>"> 
+                                <input type="number" name="subscription_<?php echo $i; ?>_duration_hours" placeholder="<?php esc_attr_e('Часы', 'subscription-price'); ?>" min="0" style="width: 80px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_hours", 0)); ?>"> 
+                                <input type="number" name="subscription_<?php echo $i; ?>_duration_minutes" placeholder="<?php esc_attr_e('Минуты', 'subscription-price'); ?>" min="0" style="width: 80px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_minutes", 0)); ?>">
+                            </td>
+                        </tr>
+                    <?php endfor; ?>
+                    <tr valign="top">
+                        <th scope="row"><?php _e('Роль при активной подписке', 'subscription-price'); ?></th>
+                        <td>
+                            <input type="text" name="subscription_role_active" value="<?php echo esc_attr(get_option('subscription_role_active', '')); ?>" class="regular-text" />
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row"><?php _e('Роль после завершения подписки', 'subscription-price'); ?></th>
+                        <td>
+                            <input type="text" name="subscription_role_expired" value="<?php echo esc_attr(get_option('subscription_role_expired', '')); ?>" class="regular-text" />
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
     }
 }
