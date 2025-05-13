@@ -14,16 +14,21 @@ if (!defined('ABSPATH')) {
     exit; // Запрет прямого доступа
 }
 
-// Подключаем файл класса настроек
+// Подключаем файлы классов
 require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-settings.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-user-dashboard.php';
 
 class SubscriptionPrice {
     public function __construct() {
         // Инициализация настроек
         new Subscription_Settings();
 
+        // Инициализация пользовательского интерфейса
+        new Subscription_User_Dashboard();
+
         // Обработка активации подписки при покупке
         add_action('woocommerce_order_status_completed', [$this, 'handle_subscription_activation']);
+
         // Планировщик завершения подписки
         add_action('subscription_end_event', [$this, 'handle_subscription_expiration']);
     }
@@ -31,89 +36,103 @@ class SubscriptionPrice {
     /**
      * Обработка завершения заказа для активации подписки
      */
-   public function handle_subscription_activation($order_id) {
-    $order = wc_get_order($order_id);
+    public function handle_subscription_activation($order_id) {
+        $order = wc_get_order($order_id);
 
-    if (!$order) {
-        error_log("Order not found: $order_id");
-        return; // Если заказ не найден, выходим
-    }
-
-    $user_id = $order->get_user_id();
-    if (!$user_id) {
-        error_log("User ID not found for order: $order_id");
-        return; // Если пользователь не найден, выходим
-    }
-
-    // Логируем содержимое подписочных планов
-    $subscription_plans = get_option('subscription_plans', []);
-    error_log("Subscription plans: " . print_r($subscription_plans, true));
-
-    foreach ($order->get_items() as $item) {
-        $product_id = $item->get_product_id();
-        if (!$product_id) {
-            continue; // Пропускаем, если товар не найден
+        if (!$order) {
+            error_log("Order not found: $order_id");
+            return; // Если заказ не найден, выходим
         }
 
-        // Проверяем родительский ID для вариативных товаров
-        $parent_id = wp_get_post_parent_id($product_id);
-        error_log("Processing product ID: $product_id, Parent ID: $parent_id");
+        $user_id = $order->get_user_id();
+        if (!$user_id) {
+            error_log("User ID not found for order: $order_id");
+            return; // Если пользователь не найден, выходим
+        }
 
-        $matched = false;
+        // Логируем содержимое подписочных планов
+        $subscription_plans = get_option('subscription_plans', []);
+        error_log("Subscription plans: " . print_r($subscription_plans, true));
 
-        foreach ($subscription_plans as $plan) {
-            if (
-                isset($plan['product_id']) &&
-                (intval($plan['product_id']) === intval($product_id) ||
-                 intval($plan['parent_id']) === intval($product_id) || // Проверяем parent_id как product_id
-                 intval($plan['product_id']) === intval($parent_id) || // Проверяем product_id как parent_id
-                 intval($plan['parent_id']) === intval($parent_id))   // Проверяем parent_id как parent_id
-            ) {
-                $this->activate_subscription($user_id, $plan);
-                $matched = true;
-                break; // Прекращаем поиск, если найдено совпадение
+        foreach ($order->get_items() as $item) {
+            $product_id = $item->get_product_id();
+            if (!$product_id) {
+                continue; // Пропускаем, если товар не найден
+            }
+
+            // Проверяем родительский ID для вариативных товаров
+            $parent_id = wp_get_post_parent_id($product_id);
+            error_log("Processing product ID: $product_id, Parent ID: $parent_id");
+
+            $matched = false;
+
+            foreach ($subscription_plans as $plan) {
+                if (
+                    isset($plan['product_id']) &&
+                    (intval($plan['product_id']) === intval($product_id) ||
+                     intval($plan['parent_id']) === intval($product_id) || 
+                     intval($plan['product_id']) === intval($parent_id) || 
+                     intval($plan['parent_id']) === intval($parent_id))
+                ) {
+                    $this->activate_subscription($user_id, $plan, $item->get_name());
+                    $matched = true;
+                    break; // Прекращаем поиск, если найдено совпадение
+                }
+            }
+
+            if (!$matched) {
+                error_log("No subscription plan matched for product ID $product_id in order $order_id.");
             }
         }
-
-        if (!$matched) {
-            error_log("No subscription plan matched for product ID $product_id in order $order_id.");
-        }
     }
-}
 
     /**
      * Активация подписки
      */
-    private function activate_subscription($user_id, $plan) {
-    if (!$user_id || empty($plan['role_active'])) {
-        error_log("Invalid user ID or active role for subscription activation.");
-        return; // Если пользователь или роль не указаны, выходим
-    }
-
-    $user = get_userdata($user_id);
-    if ($user) {
-        // Устанавливаем роль для активной подписки
-        $user->set_role($plan['role_active']);
-        error_log("Role '{$plan['role_active']}' assigned to user ID $user_id.");
-
-        // Рассчитываем длительность подписки
-        $duration = $this->calculate_duration($plan['duration']);
-        if ($duration) {
-            $scheduled = wp_schedule_single_event(
-                time() + $duration,
-                'subscription_end_event',
-                ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
-            );
-            if ($scheduled) {
-                error_log("Subscription expiration event scheduled for user ID $user_id after $duration seconds.");
-            } else {
-                error_log("Failed to schedule subscription expiration event for user ID $user_id.");
-            }
+    private function activate_subscription($user_id, $plan, $product_name) {
+        if (!$user_id || empty($plan['role_active'])) {
+            error_log("Invalid user ID or active role for subscription activation.");
+            return; // Если пользователь или роль не указаны, выходим
         }
-    } else {
-        error_log("User not found with ID: $user_id");
+
+        $user = get_userdata($user_id);
+        if ($user) {
+            // Устанавливаем роль для активной подписки
+            $user->set_role($plan['role_active']);
+            error_log("Role '{$plan['role_active']}' assigned to user ID $user_id.");
+
+            // Добавляем активную подписку в мета-данные пользователя
+            $active_subscriptions = get_user_meta($user_id, 'active_subscriptions', true);
+            if (empty($active_subscriptions)) {
+                $active_subscriptions = [];
+            }
+
+            $active_subscriptions[] = [
+                'id' => time(), // Уникальный ID подписки
+                'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
+                'expiration' => time() + $this->calculate_duration($plan['duration']),
+            ];
+
+            update_user_meta($user_id, 'active_subscriptions', $active_subscriptions);
+
+            // Рассчитываем длительность подписки
+            $duration = $this->calculate_duration($plan['duration']);
+            if ($duration) {
+                $scheduled = wp_schedule_single_event(
+                    time() + $duration,
+                    'subscription_end_event',
+                    ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
+                );
+                if ($scheduled) {
+                    error_log("Subscription expiration event scheduled for user ID $user_id after $duration seconds.");
+                } else {
+                    error_log("Failed to schedule subscription expiration event for user ID $user_id.");
+                }
+            }
+        } else {
+            error_log("User not found with ID: $user_id");
+        }
     }
-}
 
     /**
      * Обработка завершения подписки
@@ -126,8 +145,12 @@ class SubscriptionPrice {
 
         $user = get_userdata($user_id);
         if ($user) {
-            $user->set_role($expired_role); // Устанавливаем роль после завершения подписки
+            // Меняем роль пользователя на роль после завершения подписки
+            $user->set_role($expired_role);
             error_log("Role '{$expired_role}' assigned to user ID $user_id after subscription expiration.");
+
+            // Удаляем все подписки пользователя
+            delete_user_meta($user_id, 'active_subscriptions');
         } else {
             error_log("User not found with ID: $user_id");
         }
