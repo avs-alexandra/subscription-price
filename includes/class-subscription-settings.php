@@ -148,14 +148,16 @@ class Subscription_Settings {
     /**
      * Сохранение настроек
      */
- public function save_settings() {
+public function save_settings() {
     if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
-        return;
+        return; // Проверяем nonce для безопасности
     }
 
+    // Сохраняем роли для активной и истекшей подписки
     $role_active = sanitize_text_field($_POST['role_active'] ?? '');
     $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
 
+    // Проверяем, чтобы роли активной и истекшей подписки не совпадали
     if ($role_active === $role_expired) {
         wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
         exit;
@@ -164,26 +166,36 @@ class Subscription_Settings {
     update_option('subscription_role_active', $role_active);
     update_option('subscription_role_expired', $role_expired);
 
+    // Формируем массив всех подписок
+    $all_subscriptions = [];
     for ($i = 1; $i <= 4; $i++) {
         $product_id = absint($_POST["product_{$i}"] ?? 0);
+        $parent_id = wp_get_post_parent_id($product_id);
+
         if ($product_id > 0) {
-            // Проверяем, является ли товар вариантом
-            $parent_id = wp_get_post_parent_id($product_id);
-            
-            // Сохраняем оба значения: ID варианта и родительский ID
-            update_option("subscription_{$i}_product", $product_id); // ID варианта
-            if ($parent_id) {
-                update_option("subscription_{$i}_parent_product", $parent_id); // Родительский ID
-            }
+            $all_subscriptions[] = [
+                'product_id' => $product_id,
+                'parent_id' => $parent_id ?: null,
+                'duration' => [
+                    'years' => absint($_POST["duration_{$i}_years"] ?? 0),
+                    'months' => absint($_POST["duration_{$i}_months"] ?? 0),
+                    'days' => absint($_POST["duration_{$i}_days"] ?? 0),
+                    'hours' => absint($_POST["duration_{$i}_hours"] ?? 0),
+                    'minutes' => absint($_POST["duration_{$i}_minutes"] ?? 0),
+                ],
+                'role_active' => $role_active,
+                'role_expired' => $role_expired,
+            ];
         }
-        update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
-        update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
-        update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
-        update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
-        update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
     }
 
-    // Перенаправление с параметром settings-updated=true
+    // Сохраняем массив подписок в опцию
+    update_option('subscription_plans', $all_subscriptions);
+
+    // Логируем массив подписок для проверки
+    error_log("Saved subscription plans: " . print_r($all_subscriptions, true));
+
+    // Перенаправляем пользователя обратно на страницу настроек с уведомлением об успешном сохранении
     wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
     exit;
 }
