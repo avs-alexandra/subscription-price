@@ -35,7 +35,14 @@ class SubscriptionPrice {
         $order = wc_get_order($order_id);
 
         if (!$order) {
+            error_log("Order not found: $order_id");
             return; // Если заказ не найден, выходим
+        }
+
+        $user_id = $order->get_user_id();
+        if (!$user_id) {
+            error_log("User ID not found for order: $order_id");
+            return; // Если пользователь не найден, выходим
         }
 
         foreach ($order->get_items() as $item) {
@@ -47,8 +54,8 @@ class SubscriptionPrice {
             // Загружаем настройки подписки
             $subscription_plans = get_option('subscription_plans', []);
             foreach ($subscription_plans as $plan) {
-                if (isset($plan['product_id']) && $plan['product_id'] == $product_id) {
-                    $this->activate_subscription($order->get_user_id(), $plan);
+                if (isset($plan['product_id']) && intval($plan['product_id']) === intval($product_id)) {
+                    $this->activate_subscription($user_id, $plan);
                 }
             }
         }
@@ -59,6 +66,7 @@ class SubscriptionPrice {
      */
     private function activate_subscription($user_id, $plan) {
         if (!$user_id || empty($plan['role_active'])) {
+            error_log("Invalid user ID or active role for subscription activation.");
             return; // Если пользователь или роль не указаны, выходим
         }
 
@@ -66,6 +74,7 @@ class SubscriptionPrice {
         if ($user) {
             // Устанавливаем роль для активной подписки
             $user->set_role($plan['role_active']);
+            error_log("Role '{$plan['role_active']}' assigned to user ID $user_id.");
 
             // Рассчитываем длительность подписки
             $duration = $this->calculate_duration($plan['duration']);
@@ -75,7 +84,10 @@ class SubscriptionPrice {
                     'subscription_end_event',
                     ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
                 );
+                error_log("Subscription expiration event scheduled for user ID $user_id after $duration seconds.");
             }
+        } else {
+            error_log("User not found with ID: $user_id");
         }
     }
 
@@ -84,12 +96,16 @@ class SubscriptionPrice {
      */
     public function handle_subscription_expiration($user_id, $expired_role) {
         if (!$user_id || empty($expired_role)) {
+            error_log("Invalid user ID or expired role for subscription expiration.");
             return; // Если данные отсутствуют, выходим
         }
 
         $user = get_userdata($user_id);
         if ($user) {
             $user->set_role($expired_role); // Устанавливаем роль после завершения подписки
+            error_log("Role '{$expired_role}' assigned to user ID $user_id after subscription expiration.");
+        } else {
+            error_log("User not found with ID: $user_id");
         }
     }
 
