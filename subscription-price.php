@@ -19,20 +19,13 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-settings.p
 
 class SubscriptionPrice {
     public function __construct() {
-        // Добавляем страницу настроек в WooCommerce
-        add_filter('woocommerce_get_settings_pages', [$this, 'add_subscription_tab']);
+        // Инициализация настроек
+        new Subscription_Settings();
+
         // Обработка активации подписки при покупке
         add_action('woocommerce_order_status_completed', [$this, 'handle_subscription_activation']);
         // Планировщик завершения подписки
         add_action('subscription_end_event', [$this, 'handle_subscription_expiration']);
-    }
-
-    /**
-     * Добавить вкладку "Подписка" в настройки WooCommerce
-     */
-    public function add_subscription_tab($settings) {
-        $settings[] = new Subscription_Settings(); // Экземпляр класса настроек
-        return $settings;
     }
 
     /**
