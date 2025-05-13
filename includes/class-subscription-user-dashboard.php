@@ -63,8 +63,8 @@ class Subscription_User_Dashboard {
             echo '</button>';
         }
 
-        // Подключение скрипта для обработки кнопки
-        $this->enqueue_scripts();
+        // Встраиваем JavaScript код для обработки кнопки
+        $this->embed_inline_script();
     }
 
     /**
@@ -110,7 +110,11 @@ class Subscription_User_Dashboard {
             wp_send_json_error(__('Нет прав для выполнения операции.', 'subscription-price'));
         }
 
+        // Получаем ID пользователя
         $user_id = absint($_POST['user_id'] ?? 0);
+
+        // Логируем вызов метода AJAX и переданный user_id
+        error_log('AJAX cancel_subscription called for user ID: ' . $user_id);
 
         if (!$user_id) {
             wp_send_json_error(__('Некорректный ID пользователя.', 'subscription-price'));
@@ -129,19 +133,39 @@ class Subscription_User_Dashboard {
     }
 
     /**
-     * Подключение скриптов для обработки кнопки
+     * Встраивание JavaScript кода для обработки кнопки
      */
-    private function enqueue_scripts() {
-        wp_enqueue_script(
-            'subscription-user-dashboard',
-            plugin_dir_url(__FILE__) . '../assets/js/subscription-user-dashboard.js',
-            ['jquery'],
-            '1.0.0',
-            true
-        );
+    private function embed_inline_script() {
+        echo '<script>
+            jQuery(document).ready(function ($) {
+                $("#cancel-subscription-button").on("click", function () {
+                    if (!confirm("Вы уверены, что хотите отменить подписку?")) {
+                        return;
+                    }
 
-        wp_localize_script('subscription-user-dashboard', 'SubscriptionDashboard', [
-            'ajax_url' => admin_url('admin-ajax.php'),
-        ]);
+                    var userId = $(this).data("user-id");
+
+                    $.ajax({
+                        url: "' . admin_url('admin-ajax.php') . '",
+                        method: "POST",
+                        data: {
+                            action: "cancel_subscription",
+                            user_id: userId,
+                        },
+                        success: function (response) {
+                            if (response.success) {
+                                alert(response.data);
+                                location.reload(); // Перезагружаем страницу
+                            } else {
+                                alert(response.data);
+                            }
+                        },
+                        error: function () {
+                            alert("Произошла ошибка. Попробуйте позже.");
+                        },
+                    });
+                });
+            });
+        </script>';
     }
 }
