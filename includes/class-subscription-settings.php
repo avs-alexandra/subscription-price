@@ -148,35 +148,42 @@ class Subscription_Settings {
     /**
      * Сохранение настроек
      */
-    public function save_settings() {
-        if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
-            return;
-        }
+   public function save_settings() {
+    if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
+        return;
+    }
 
-        $role_active = sanitize_text_field($_POST['role_active'] ?? '');
-        $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
+    $role_active = sanitize_text_field($_POST['role_active'] ?? '');
+    $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
 
-        if ($role_active === $role_expired) {
-            wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
-            exit;
-        }
-
-        update_option('subscription_role_active', $role_active);
-        update_option('subscription_role_expired', $role_expired);
-
-        for ($i = 1; $i <= 4; $i++) {
-            update_option("subscription_{$i}_product", absint($_POST["product_{$i}"] ?? 0));
-            update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
-            update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
-            update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
-            update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
-            update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
-        }
-
-        // Перенаправление с параметром settings-updated=true
-        wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
+    if ($role_active === $role_expired) {
+        wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
         exit;
     }
+
+    update_option('subscription_role_active', $role_active);
+    update_option('subscription_role_expired', $role_expired);
+
+    for ($i = 1; $i <= 4; $i++) {
+        $product_id = absint($_POST["product_{$i}"] ?? 0);
+        if ($product_id > 0) {
+            // Проверяем, является ли товар вариантом
+            $parent_id = wp_get_post_parent_id($product_id);
+            $product_to_save = $parent_id ? $parent_id : $product_id;
+
+            update_option("subscription_{$i}_product", $product_to_save);
+        }
+        update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
+        update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
+        update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
+        update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
+        update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
+    }
+
+    // Перенаправление с параметром settings-updated=true
+    wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
+    exit;
+}
 
     /**
      * Получить список ролей
