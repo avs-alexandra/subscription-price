@@ -163,7 +163,7 @@ class SubscriptionPrice {
     /**
      * Рассчитать длительность подписки в секундах
      */
-    private function calculate_duration($duration) {
+   private function calculate_duration($duration) {
     $total_seconds = 0;
 
     // Текущая дата
