@@ -107,19 +107,23 @@ class SubscriptionPrice {
                 $active_subscriptions = [];
             }
 
+            $current_time = time();
+            $duration = $this->calculate_duration($plan['duration']);
+
             $active_subscriptions[] = [
-                'id' => time(), // Уникальный ID подписки
+                'id' => $current_time, // Уникальный ID подписки
                 'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
-                'expiration' => time() + $this->calculate_duration($plan['duration']),
+                'start_date' => $current_time, // Текущая дата как дата начала
+                'end_date' => $current_time + $duration, // Дата окончания
+                'expiration' => $current_time + $duration, // Для совместимости с текущей логикой
             ];
 
             update_user_meta($user_id, 'active_subscriptions', $active_subscriptions);
 
-            // Рассчитываем длительность подписки
-            $duration = $this->calculate_duration($plan['duration']);
+            // Планировщик завершения подписки
             if ($duration) {
                 $scheduled = wp_schedule_single_event(
-                    time() + $duration,
+                    $current_time + $duration,
                     'subscription_end_event',
                     ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
                 );
