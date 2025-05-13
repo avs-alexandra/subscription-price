@@ -31,35 +31,41 @@ class SubscriptionPrice {
     /**
      * Обработка завершения заказа для активации подписки
      */
-    public function handle_subscription_activation($order_id) {
-        $order = wc_get_order($order_id);
+   public function handle_subscription_activation($order_id) {
+    $order = wc_get_order($order_id);
 
-        if (!$order) {
-            error_log("Order not found: $order_id");
-            return; // Если заказ не найден, выходим
+    if (!$order) {
+        error_log("Order not found: $order_id");
+        return; // Если заказ не найден, выходим
+    }
+
+    $user_id = $order->get_user_id();
+    if (!$user_id) {
+        error_log("User ID not found for order: $order_id");
+        return; // Если пользователь не найден, выходим
+    }
+
+    foreach ($order->get_items() as $item) {
+        $product_id = $item->get_product_id();
+        if (!$product_id) {
+            continue; // Пропускаем, если товар не найден
         }
 
-        $user_id = $order->get_user_id();
-        if (!$user_id) {
-            error_log("User ID not found for order: $order_id");
-            return; // Если пользователь не найден, выходим
+        // Загружаем настройки подписки
+        $subscription_plans = get_option('subscription_plans', []);
+        $matched = false;
+        foreach ($subscription_plans as $plan) {
+            if (isset($plan['product_id']) && intval($plan['product_id']) === intval($product_id)) {
+                $this->activate_subscription($user_id, $plan);
+                $matched = true;
+            }
         }
 
-        foreach ($order->get_items() as $item) {
-            $product_id = $item->get_product_id();
-            if (!$product_id) {
-                continue; // Пропускаем, если товар не найден
-            }
-
-            // Загружаем настройки подписки
-            $subscription_plans = get_option('subscription_plans', []);
-            foreach ($subscription_plans as $plan) {
-                if (isset($plan['product_id']) && intval($plan['product_id']) === intval($product_id)) {
-                    $this->activate_subscription($user_id, $plan);
-                }
-            }
+        if (!$matched) {
+            error_log("No subscription plan matched for product ID $product_id in order $order_id.");
         }
     }
+}
 
     /**
      * Активация подписки
@@ -79,12 +85,16 @@ class SubscriptionPrice {
             // Рассчитываем длительность подписки
             $duration = $this->calculate_duration($plan['duration']);
             if ($duration) {
-                wp_schedule_single_event(
+                $scheduled = wp_schedule_single_event(
                     time() + $duration,
                     'subscription_end_event',
                     ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
                 );
-                error_log("Subscription expiration event scheduled for user ID $user_id after $duration seconds.");
+                if ($scheduled) {
+                    error_log("Subscription expiration event scheduled for user ID $user_id after $duration seconds.");
+                } else {
+                    error_log("Failed to schedule subscription expiration event for user ID $user_id.");
+                }
             }
         } else {
             error_log("User not found with ID: $user_id");
