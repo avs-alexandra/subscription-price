@@ -164,26 +164,33 @@ class SubscriptionPrice {
      * Рассчитать длительность подписки в секундах
      */
     private function calculate_duration($duration) {
-        $total_seconds = 0;
+    $total_seconds = 0;
 
-        if (!empty($duration['years'])) {
-            $total_seconds += $duration['years'] * YEAR_IN_SECONDS;
-        }
-        if (!empty($duration['months'])) {
-            $total_seconds += $duration['months'] * MONTH_IN_SECONDS;
-        }
-        if (!empty($duration['days'])) {
-            $total_seconds += $duration['days'] * DAY_IN_SECONDS;
-        }
-        if (!empty($duration['hours'])) {
-            $total_seconds += $duration['hours'] * HOUR_IN_SECONDS;
-        }
-        if (!empty($duration['minutes'])) {
-            $total_seconds += $duration['minutes'] * MINUTE_IN_SECONDS;
-        }
+    // Текущая дата
+    $current_date = new DateTime();
 
-        return $total_seconds;
+    if (isset($duration['years']) && $duration['years'] > 0) {
+        $current_date->modify('+' . $duration['years'] . ' years');
     }
+    if (isset($duration['months']) && $duration['months'] > 0) {
+        $current_date->modify('+' . $duration['months'] . ' months');
+    }
+    if (isset($duration['days']) && $duration['days'] > 0) {
+        $total_seconds += $duration['days'] * DAY_IN_SECONDS;
+    }
+    if (isset($duration['hours']) && $duration['hours'] > 0) {
+        $total_seconds += $duration['hours'] * HOUR_IN_SECONDS;
+    }
+    if (isset($duration['minutes']) && $duration['minutes'] > 0) {
+        $total_seconds += $duration['minutes'] * MINUTE_IN_SECONDS;
+    }
+
+    // Вычисляем разницу между текущей датой и итоговой датой
+    $end_date = $current_date->getTimestamp();
+    $total_seconds += $end_date - time();
+
+    return $total_seconds;
+}
 }
 
 // Инициализируем плагин
