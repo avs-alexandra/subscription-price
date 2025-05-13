@@ -148,7 +148,7 @@ class Subscription_Settings {
     /**
      * Сохранение настроек
      */
-   public function save_settings() {
+ public function save_settings() {
     if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
         return;
     }
@@ -169,9 +169,12 @@ class Subscription_Settings {
         if ($product_id > 0) {
             // Проверяем, является ли товар вариантом
             $parent_id = wp_get_post_parent_id($product_id);
-            $product_to_save = $parent_id ? $parent_id : $product_id;
-
-            update_option("subscription_{$i}_product", $product_to_save);
+            
+            // Сохраняем оба значения: ID варианта и родительский ID
+            update_option("subscription_{$i}_product", $product_id); // ID варианта
+            if ($parent_id) {
+                update_option("subscription_{$i}_parent_product", $parent_id); // Родительский ID
+            }
         }
         update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
         update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
