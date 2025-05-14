@@ -101,71 +101,102 @@ class Subscription_User_Dashboard {
         return $value;
     }
 
-    /**
-     * Обработка завершения подписки через AJAX
-     */
-    public function cancel_subscription() {
-        // Проверяем права доступа
-        if (!current_user_can('edit_users')) {
-            wp_send_json_error(__('Нет прав для выполнения операции.', 'subscription-price'));
-        }
+/**
+ * Обработка завершения подписки через AJAX
+ */
+public function cancel_subscription() {
+    // Проверяем права доступа
+    if (!current_user_can('edit_users')) {
+        wp_send_json_error(__('Нет прав для выполнения операции.', 'subscription-price'));
+    }
 
-        // Получаем ID пользователя
-        $user_id = absint($_POST['user_id'] ?? 0);
+    // Получаем ID пользователя
+    $user_id = absint($_POST['user_id'] ?? 0);
 
-        // Логируем вызов метода AJAX и переданный user_id
-        error_log('AJAX cancel_subscription called for user ID: ' . $user_id);
+    if (!$user_id) {
+        wp_send_json_error(__('Некорректный ID пользователя.', 'subscription-price'));
+    }
 
-        if (!$user_id) {
-            wp_send_json_error(__('Некорректный ID пользователя.', 'subscription-price'));
+    // Получаем активную и истекшую роли из настроек
+    $active_role = get_option('subscription_role_active', '');
+    $expired_role = get_option('subscription_role_expired', '');
+
+    if (empty($active_role) || empty($expired_role)) {
+        wp_send_json_error(__('Роли для подписки не настроены.', 'subscription-price'));
+    }
+
+    // Обрабатываем пользователя
+    $user = get_userdata($user_id);
+    if ($user) {
+        // Проверяем, есть ли активная роль у пользователя
+        if (in_array($active_role, $user->roles, true)) {
+            // Удаляем активную роль
+            $user->remove_role($active_role);
+
+            // Добавляем роль завершённой подписки
+            if (!in_array($expired_role, $user->roles, true)) {
+                $user->add_role($expired_role);
+            }
+
+            // Принудительное обновление объекта пользователя
+            clean_user_cache($user_id);
+            $user = get_userdata($user_id); // Повторно получаем объект пользователя
         }
 
         // Удаляем все активные подписки пользователя
         delete_user_meta($user_id, 'active_subscriptions');
 
-        // Меняем роль пользователя на "customer" (или другую роль)
-        $user = get_userdata($user_id);
-        if ($user) {
-            $user->set_role('customer');
+        // Добавляем небольшую задержку
+        usleep(100000); // Задержка в 100 мс
+    } else {
+        wp_send_json_error(__('Пользователь не найден.', 'subscription-price'));
+    }
+
+    // Завершаем AJAX-запрос успешно
+    wp_send_json_success(__('Подписка успешно отменена.', 'subscription-price'));
+}
+
+
+   /**
+ * Встраивание JavaScript кода для обработки кнопки
+ */
+private function embed_inline_script() {
+    echo '<script>
+        jQuery(document).ready(function ($) {
+    $("#cancel-subscription-button").on("click", function () {
+        if (!confirm("Вы уверены, что хотите отменить подписку?")) {
+            return;
         }
 
-        wp_send_json_success(__('Подписка успешно отменена. Роль пользователя изменена.', 'subscription-price'));
-    }
+        var button = $(this);
+        var userId = button.data("user-id");
 
-    /**
-     * Встраивание JavaScript кода для обработки кнопки
-     */
-    private function embed_inline_script() {
-        echo '<script>
-            jQuery(document).ready(function ($) {
-                $("#cancel-subscription-button").on("click", function () {
-                    if (!confirm("Вы уверены, что хотите отменить подписку?")) {
-                        return;
-                    }
+        // Отключаем кнопку сразу после нажатия
+        button.prop("disabled", true);
 
-                    var userId = $(this).data("user-id");
-
-                    $.ajax({
-                        url: "' . admin_url('admin-ajax.php') . '",
-                        method: "POST",
-                        data: {
-                            action: "cancel_subscription",
-                            user_id: userId,
-                        },
-                        success: function (response) {
-                            if (response.success) {
-                                alert(response.data);
-                                location.reload(); // Перезагружаем страницу
-                            } else {
-                                alert(response.data);
-                            }
-                        },
-                        error: function () {
-                            alert("Произошла ошибка. Попробуйте позже.");
-                        },
-                    });
-                });
-            });
-        </script>';
-    }
+        $.ajax({
+            url: ajaxurl,
+            method: "POST",
+            data: {
+                action: "cancel_subscription",
+                user_id: userId,
+            },
+            success: function (response) {
+                if (response.success) {
+                    alert("Подписка успешно отменена.");
+                    button.text("Подписка отменена, перезагрузите страницу");
+                } else {
+                    alert(response.data);
+                    button.prop("disabled", false); // Включаем кнопку обратно при ошибке
+                }
+            },
+            error: function () {
+                alert("Произошла ошибка. Попробуйте позже.");
+                button.prop("disabled", false); // Включаем кнопку обратно при ошибке
+            },
+        });
+    });
+});
+    </script>';
+}
 }
