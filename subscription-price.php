@@ -63,18 +63,11 @@ class SubscriptionPrice {
             // Логируем проверку текущего product_id
             error_log("Checking subscription plan for product ID: $product_id");
 
-            $matched = false;
-
             foreach ($subscription_plans as $plan) {
                 if (intval($plan['product_id']) === intval($product_id)) {
                     $this->activate_subscription($user_id, $plan, $item->get_name());
-                    $matched = true;
                     break; // Прекращаем поиск, если найдено совпадение
                 }
-            }
-
-            if (!$matched) {
-                error_log("No subscription plan matched for product ID $product_id in order $order_id.");
             }
         }
     }
@@ -83,16 +76,22 @@ class SubscriptionPrice {
      * Активация подписки
      */
     private function activate_subscription($user_id, $plan, $product_name) {
-        if (!$user_id || empty($plan['role_active'])) {
-            error_log("Invalid user ID or active role for subscription activation.");
-            return; // Если пользователь или роль не указаны, выходим
+        if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
+            error_log("Invalid user ID or roles for subscription activation.");
+            return; // Если пользователь или роли не указаны, выходим
         }
 
         $user = get_userdata($user_id);
         if ($user) {
-            // Устанавливаем роль для активной подписки
-            $user->set_role($plan['role_active']);
-            error_log("Role '{$plan['role_active']}' assigned to user ID $user_id.");
+            // Проверяем, есть ли у пользователя роль Customer
+            if (in_array($plan['role_expired'], $user->roles, true)) {
+                // Меняем роль с Customer на Member
+                $user->remove_role($plan['role_expired']);
+                $user->add_role($plan['role_active']);
+                error_log("Role '{$plan['role_active']}' added, '{$plan['role_expired']}' removed for user ID $user_id.");
+            } else {
+                error_log("User ID $user_id does not have role '{$plan['role_expired']}', skipping role change.");
+            }
 
             // Удаляем текущие активные подписки
             delete_user_meta($user_id, 'active_subscriptions');
@@ -130,24 +129,37 @@ class SubscriptionPrice {
     /**
      * Обработка завершения подписки
      */
-    public function handle_subscription_expiration($user_id, $expired_role) {
-        if (!$user_id || empty($expired_role)) {
-            error_log("Invalid user ID or expired role for subscription expiration.");
-            return; // Если данные отсутствуют, выходим
-        }
+   /**
+ * Обработка завершения подписки
+ */
+public function handle_subscription_expiration($user_id, $expired_role) {
+    $active_role = get_option('subscription_role_active', '');
 
-        $user = get_userdata($user_id);
-        if ($user) {
-            // Меняем роль пользователя на роль после завершения подписки
-            $user->set_role($expired_role);
-            error_log("Role '{$expired_role}' assigned to user ID $user_id after subscription expiration.");
-
-            // Удаляем все подписки пользователя
-            delete_user_meta($user_id, 'active_subscriptions');
-        } else {
-            error_log("User not found with ID: $user_id");
-        }
+    if (!$user_id || empty($expired_role) || empty($active_role)) {
+        error_log("Invalid user ID or roles for subscription expiration.");
+        return; // Если данные отсутствуют, выходим
     }
+
+    error_log("Subscription expiration event triggered for user ID $user_id.");
+
+    $user = get_userdata($user_id);
+    if ($user) {
+        // Проверяем, есть ли у пользователя роль Member (активная роль подписки)
+        if (in_array($active_role, $user->roles, true)) {
+            // Меняем роль с Member на Customer
+            $user->remove_role($active_role);
+            $user->add_role($expired_role);
+            error_log("Role '{$expired_role}' added, '{$active_role}' removed for user ID $user_id.");
+        } else {
+            error_log("User ID $user_id does not have role '{$active_role}', skipping role change.");
+        }
+
+        // Удаляем все подписки пользователя
+        delete_user_meta($user_id, 'active_subscriptions');
+    } else {
+        error_log("User not found with ID: $user_id");
+    }
+}
 
     /**
      * Рассчитать длительность подписки в секундах
