@@ -129,10 +129,11 @@ class SubscriptionPrice {
     /**
      * Обработка завершения подписки
      */
-   /**
- * Обработка завершения подписки
- */
-public function handle_subscription_expiration($user_id, $expired_role) {
+  public function handle_subscription_expiration($user_id, $expired_role = '') {
+    if (empty($expired_role)) {
+        $expired_role = get_option('subscription_role_expired', '');
+    }
+
     $active_role = get_option('subscription_role_active', '');
 
     if (!$user_id || empty($expired_role) || empty($active_role)) {
