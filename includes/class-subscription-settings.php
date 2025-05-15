@@ -142,21 +142,21 @@ class Subscription_Settings {
                 <table class="form-table">
                     <tr>
                         <th scope="row">
-                            <label for="reminder_email_subject"><?php _e('Тема письма (напоминание)', 'subscription-price'); ?></label>
+                            <label for="sp_reminder_email_subject"><?php _e('Тема письма (напоминание)', 'subscription-price'); ?></label>
                         </th>
                         <td>
-                            <input type="text" id="reminder_email_subject" name="reminder_email_subject" style="width: 70%;" value="<?php echo esc_attr(get_option('reminder_email_subject', __('Ваша подписка скоро завершится', 'subscription-price'))); ?>">
+                            <input type="text" id="sp_reminder_email_subject" name="sp_reminder_email_subject" style="width: 70%;" value="<?php echo esc_attr(get_option('sp_reminder_email_subject', __('Ваша подписка скоро завершится', 'subscription-price'))); ?>">
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="reminder_email_body"><?php _e('Текст письма (напоминание)', 'subscription-price'); ?></label>
+                            <label for="sp_reminder_email_body"><?php _e('Текст письма (напоминание)', 'subscription-price'); ?></label>
                         </th>
                         <td>
                             <?php
-                            $reminder_email_body = get_option('reminder_email_body', __('Здравствуйте, [user]! Ваша подписка закончится [end_date].', 'subscription-price'));
-                            wp_editor($reminder_email_body, 'reminder_email_body', [
-                                'textarea_name' => 'reminder_email_body',
+                            $reminder_email_body = get_option('sp_reminder_email_body', __('Здравствуйте, [user]! Ваша подписка закончится [end_date].', 'subscription-price'));
+                            wp_editor($reminder_email_body, 'sp_reminder_email_body', [
+                                'textarea_name' => 'sp_reminder_email_body',
                                 'textarea_rows' => 2,
                                 'media_buttons' => true,
                             ]);
@@ -165,21 +165,21 @@ class Subscription_Settings {
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="expired_email_subject"><?php _e('Тема письма (завершение)', 'subscription-price'); ?></label>
+                            <label for="sp_expired_email_subject"><?php _e('Тема письма (завершение)', 'subscription-price'); ?></label>
                         </th>
                         <td>
-                            <input type="text" id="expired_email_subject" name="expired_email_subject" style="width: 70%;" value="<?php echo esc_attr(get_option('expired_email_subject', __('Ваша подписка завершилась', 'subscription-price'))); ?>">
+                            <input type="text" id="sp_expired_email_subject" name="sp_expired_email_subject" style="width: 70%;" value="<?php echo esc_attr(get_option('sp_expired_email_subject', __('Ваша подписка завершилась', 'subscription-price'))); ?>">
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="expired_email_body"><?php _e('Текст письма (завершение)', 'subscription-price'); ?></label>
+                            <label for="sp_expired_email_body"><?php _e('Текст письма (завершение)', 'subscription-price'); ?></label>
                         </th>
                         <td>
                             <?php
-                            $expired_email_body = get_option('expired_email_body', __('Здравствуйте, [user]! Ваша подписка завершилась.', 'subscription-price'));
-                            wp_editor($expired_email_body, 'expired_email_body', [
-                                'textarea_name' => 'expired_email_body',
+                            $expired_email_body = get_option('sp_expired_email_body', __('Здравствуйте, [user]! Ваша подписка завершилась.', 'subscription-price'));
+                            wp_editor($expired_email_body, 'sp_expired_email_body', [
+                                'textarea_name' => 'sp_expired_email_body',
                                 'textarea_rows' => 2,
                                 'media_buttons' => true,
                             ]);
@@ -188,10 +188,10 @@ class Subscription_Settings {
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="email_font"><?php _e('Шрифт письма', 'subscription-price'); ?></label>
+                            <label for="sp_email_font"><?php _e('Шрифт письма', 'subscription-price'); ?></label>
                         </th>
                         <td>
-                            <input type="text" id="email_font" name="email_font" style="width: 50%;" value="<?php echo esc_attr(get_option('email_font', 'Arial, sans-serif')); ?>">
+                            <input type="text" id="sp_email_font" name="sp_email_font" style="width: 50%;" value="<?php echo esc_attr(get_option('sp_email_font', 'Arial, sans-serif')); ?>">
                             <p class="description"><?php _e('Укажите шрифт для письма (например, Arial, sans-serif).', 'subscription-price'); ?></p>
                         </td>
                     </tr>
@@ -213,11 +213,11 @@ class Subscription_Settings {
             return; // Проверяем nonce для безопасности
         }
         // Сохраняем настройки писем
-        update_option('reminder_email_subject', sanitize_text_field($_POST['reminder_email_subject']));
-        update_option('reminder_email_body', wp_kses_post($_POST['reminder_email_body']));
-        update_option('expired_email_subject', sanitize_text_field($_POST['expired_email_subject']));
-        update_option('expired_email_body', wp_kses_post($_POST['expired_email_body']));
-        update_option('email_font', sanitize_text_field($_POST['email_font']));
+        update_option('sp_reminder_email_subject', sanitize_text_field($_POST['sp_reminder_email_subject']));
+        update_option('sp_reminder_email_body', wp_kses_post($_POST['sp_reminder_email_body']));
+        update_option('sp_expired_email_subject', sanitize_text_field($_POST['sp_expired_email_subject']));
+        update_option('sp_expired_email_body', wp_kses_post($_POST['sp_expired_email_body']));
+        update_option('sp_email_font', sanitize_text_field($_POST['sp_email_font']));
 
         // Сохраняем роли для активной и истекшей подписки
         $role_active = sanitize_text_field($_POST['role_active'] ?? '');
