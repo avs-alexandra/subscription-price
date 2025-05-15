@@ -40,28 +40,21 @@ class SubscriptionPrice {
         $order = wc_get_order($order_id);
 
         if (!$order) {
-            error_log("Order not found: $order_id");
             return; // Если заказ не найден, выходим
         }
 
         $user_id = $order->get_user_id();
         if (!$user_id) {
-            error_log("User ID not found for order: $order_id");
             return; // Если пользователь не найден, выходим
         }
 
-        // Логируем содержимое подписочных планов
         $subscription_plans = get_option('subscription_plans', []);
-        error_log("Subscription plans: " . print_r($subscription_plans, true));
 
         foreach ($order->get_items() as $item) {
             $product_id = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
             if (!$product_id) {
                 continue; // Пропускаем, если товар не найден
             }
-
-            // Логируем проверку текущего product_id
-            error_log("Checking subscription plan for product ID: $product_id");
 
             foreach ($subscription_plans as $plan) {
                 if (intval($plan['product_id']) === intval($product_id)) {
@@ -77,29 +70,21 @@ class SubscriptionPrice {
      */
     private function activate_subscription($user_id, $plan, $product_name) {
         if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
-            error_log("Invalid user ID or roles for subscription activation.");
             return; // Если пользователь или роли не указаны, выходим
         }
 
         $user = get_userdata($user_id);
         if ($user) {
-            // Проверяем, есть ли у пользователя роль Customer
             if (in_array($plan['role_expired'], $user->roles, true)) {
-                // Меняем роль с Customer на Member
                 $user->remove_role($plan['role_expired']);
                 $user->add_role($plan['role_active']);
-                error_log("Role '{$plan['role_active']}' added, '{$plan['role_expired']}' removed for user ID $user_id.");
-            } else {
-                error_log("User ID $user_id does not have role '{$plan['role_expired']}', skipping role change.");
             }
 
-            // Удаляем текущие активные подписки
             delete_user_meta($user_id, 'active_subscriptions');
 
             $current_time = time();
             $duration = $this->calculate_duration($plan['duration']);
 
-            // Добавляем новую подписку в мета-данные пользователя
             $new_subscription = [
                 'id' => $current_time, // Уникальный ID подписки
                 'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
@@ -110,57 +95,62 @@ class SubscriptionPrice {
 
             update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
 
-            // Планировщик завершения подписки
+            $this->clear_existing_subscription_events($user_id);
+
             if ($duration) {
-                if (!wp_next_scheduled('subscription_end_event', ['user_id' => $user_id, 'expired_role' => $plan['role_expired']])) {
-                    wp_schedule_single_event(
-                        $current_time + $duration,
-                        'subscription_end_event',
-                        ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
-                    );
-                    error_log("Subscription expiration event scheduled for user ID $user_id after $duration seconds.");
-                }
+                wp_schedule_single_event(
+                    $current_time + $duration,
+                    'subscription_end_event',
+                    ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
+                );
             }
-        } else {
-            error_log("User not found with ID: $user_id");
         }
     }
 
     /**
      * Обработка завершения подписки
      */
-  public function handle_subscription_expiration($user_id, $expired_role = '') {
-    if (empty($expired_role)) {
-        $expired_role = get_option('subscription_role_expired', '');
-    }
-
-    $active_role = get_option('subscription_role_active', '');
-
-    if (!$user_id || empty($expired_role) || empty($active_role)) {
-        error_log("Invalid user ID or roles for subscription expiration.");
-        return; // Если данные отсутствуют, выходим
-    }
-
-    error_log("Subscription expiration event triggered for user ID $user_id.");
-
-    $user = get_userdata($user_id);
-    if ($user) {
-        // Проверяем, есть ли у пользователя роль Member (активная роль подписки)
-        if (in_array($active_role, $user->roles, true)) {
-            // Меняем роль с Member на Customer
-            $user->remove_role($active_role);
-            $user->add_role($expired_role);
-            error_log("Role '{$expired_role}' added, '{$active_role}' removed for user ID $user_id.");
-        } else {
-            error_log("User ID $user_id does not have role '{$active_role}', skipping role change.");
+    public function handle_subscription_expiration($user_id, $expired_role = '') {
+        if (empty($expired_role)) {
+            $expired_role = get_option('subscription_role_expired', '');
         }
 
-        // Удаляем все подписки пользователя
-        delete_user_meta($user_id, 'active_subscriptions');
-    } else {
-        error_log("User not found with ID: $user_id");
+        $active_role = get_option('subscription_role_active', '');
+
+        if (!$user_id || empty($expired_role) || empty($active_role)) {
+            return; // Если данные отсутствуют, выходим
+        }
+
+        $user = get_userdata($user_id);
+        if ($user) {
+            if (in_array($active_role, $user->roles, true)) {
+                $user->remove_role($active_role);
+                $user->add_role($expired_role);
+            }
+
+            delete_user_meta($user_id, 'active_subscriptions');
+        }
     }
-}
+
+    /**
+     * Удаление старых событий завершения подписки
+     */
+    private function clear_existing_subscription_events($user_id) {
+        $crons = _get_cron_array();
+        if (!$crons) {
+            return;
+        }
+
+        foreach ($crons as $timestamp => $hooks) {
+            if (isset($hooks['subscription_end_event'])) {
+                foreach ($hooks['subscription_end_event'] as $key => $event) {
+                    if (isset($event['args']['user_id']) && intval($event['args']['user_id']) === intval($user_id)) {
+                        wp_unschedule_event($timestamp, 'subscription_end_event', $event['args']);
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Рассчитать длительность подписки в секундах
@@ -168,7 +158,6 @@ class SubscriptionPrice {
     private function calculate_duration($duration) {
         $total_seconds = 0;
 
-        // Текущая дата
         $current_date = new DateTime();
 
         if (isset($duration['years']) && $duration['years'] > 0) {
@@ -187,7 +176,6 @@ class SubscriptionPrice {
             $total_seconds += $duration['minutes'] * MINUTE_IN_SECONDS;
         }
 
-        // Вычисляем разницу между текущей датой и итоговой датой
         $end_date = $current_date->getTimestamp();
         $total_seconds += $end_date - time();
 
