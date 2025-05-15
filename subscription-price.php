@@ -1,11 +1,13 @@
 <?php
 /**
  * Plugin Name: Subscription price
- * Plugin URI: https://example.com
- * Description: Плагин добавляет вкладку "Подписка" в настройки WooCommerce для управления ролями пользователей в зависимости от подписки.
+ * Plugin URI: https://github.com/avs-alexandra/subscription-price
+ * Description: Функционал подписки для WooCommerce на основе смены ролей.
  * Version: 1.0.0
  * Author: avs-alexandra
- * Author URI: https://example.com
+ * Author URI: https://github.com/avs-alexandra
+ * License: GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: subscription-price
  * Domain Path: /languages
  */
@@ -17,6 +19,8 @@ if (!defined('ABSPATH')) {
 // Подключаем файлы классов
 require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-settings.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-user-dashboard.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-shortcodes.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-notifications.php';
 
 class SubscriptionPrice {
     public function __construct() {
@@ -25,12 +29,18 @@ class SubscriptionPrice {
 
         // Инициализация пользовательского интерфейса
         new Subscription_User_Dashboard();
+        
+         // Инициализация шорткодов
+        new Subscription_Shortcodes();
+        
+        // Отправка уведомлений о завершении подписки
+        new SubscriptionNotifications();
 
         // Обработка активации подписки при покупке
         add_action('woocommerce_order_status_completed', [$this, 'handle_subscription_activation']);
 
-        // Планировщик завершения подписки
-        add_action('subscription_end_event', [$this, 'handle_subscription_expiration']);
+        // Регистрация обработчика завершения подписки (через Action Scheduler)
+        add_action('handle_subscription_expiration', [$this, 'handle_subscription_expiration']);
     }
 
     /**
@@ -68,44 +78,57 @@ class SubscriptionPrice {
     /**
      * Активация подписки
      */
-    private function activate_subscription($user_id, $plan, $product_name) {
-        if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
-            return; // Если пользователь или роли не указаны, выходим
+   private function activate_subscription($user_id, $plan, $product_name) {
+    if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
+        return; // Если пользователь или роли не указаны, выходим
+    }
+
+    $user = get_userdata($user_id);
+    if ($user) {
+        if (in_array($plan['role_expired'], $user->roles, true)) {
+            $user->remove_role($plan['role_expired']);
+            $user->add_role($plan['role_active']);
         }
 
-        $user = get_userdata($user_id);
-        if ($user) {
-            if (in_array($plan['role_expired'], $user->roles, true)) {
-                $user->remove_role($plan['role_expired']);
-                $user->add_role($plan['role_active']);
-            }
+        delete_user_meta($user_id, 'active_subscriptions');
 
-            delete_user_meta($user_id, 'active_subscriptions');
+        $current_time = time();
+        $duration = $this->calculate_duration($plan['duration']);
 
-            $current_time = time();
-            $duration = $this->calculate_duration($plan['duration']);
+        $new_subscription = [
+            'id' => $current_time, // Уникальный ID подписки
+            'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
+            'start_date' => $current_time, // Текущая дата как дата начала
+            'end_date' => $current_time + $duration, // Дата окончания
+        ];
 
-            $new_subscription = [
-                'id' => $current_time, // Уникальный ID подписки
-                'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
-                'start_date' => $current_time, // Текущая дата как дата начала
-                'end_date' => $current_time + $duration, // Дата окончания
-                'expiration' => $current_time + $duration, // Для совместимости с текущей логикой
-            ];
+        update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
 
-            update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
+        // Планируем завершение подписки через Action Scheduler
+        if ($duration) {
+            // Запланировать уведомление за 3 дня до завершения
+            as_schedule_single_action(
+                $new_subscription['end_date'] - 3 * DAY_IN_SECONDS,
+                'subscription_notification_reminder',
+                ['user_id' => $user_id]
+            );
 
-            $this->clear_existing_subscription_events($user_id);
+            // Запланировать уведомление о завершении подписки
+            as_schedule_single_action(
+                $new_subscription['end_date'],
+                'subscription_notification_expired',
+                ['user_id' => $user_id]
+            );
 
-            if ($duration) {
-                wp_schedule_single_event(
-                    $current_time + $duration,
-                    'subscription_end_event',
-                    ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
-                );
-            }
+            // Запланировать завершение подписки
+            as_schedule_single_action(
+                $new_subscription['end_date'],
+                'handle_subscription_expiration',
+                ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
+            );
         }
     }
+}
 
     /**
      * Обработка завершения подписки
@@ -129,26 +152,6 @@ class SubscriptionPrice {
             }
 
             delete_user_meta($user_id, 'active_subscriptions');
-        }
-    }
-
-    /**
-     * Удаление старых событий завершения подписки
-     */
-    private function clear_existing_subscription_events($user_id) {
-        $crons = _get_cron_array();
-        if (!$crons) {
-            return;
-        }
-
-        foreach ($crons as $timestamp => $hooks) {
-            if (isset($hooks['subscription_end_event'])) {
-                foreach ($hooks['subscription_end_event'] as $key => $event) {
-                    if (isset($event['args']['user_id']) && intval($event['args']['user_id']) === intval($user_id)) {
-                        wp_unschedule_event($timestamp, 'subscription_end_event', $event['args']);
-                    }
-                }
-            }
         }
     }
 
