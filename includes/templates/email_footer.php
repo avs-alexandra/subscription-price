@@ -1,22 +1,12 @@
 <tr>
     <td align="center" valign="top">
-        <table border="0" cellpadding="10" cellspacing="0" width="600">
-            <tbody>
+        <table border="0" cellpadding="10" cellspacing="0" width="600" style="border-top:1px solid #dedede;background-color:#f5f5f5;">
             <tr>
-                <td valign="top" style="padding:0">
-                    <table border="0" cellpadding="10" cellspacing="0" width="100%">
-                        <tbody>
-                        <tr>
-                            <td colspan="2" valign="middle"
-                                style="border:0;color:{text_color};font-family:{font_family};font-size:12px;line-height:125%;padding:0 48px 48px 48px;text-align:center">
-                                <p>{description}</p>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
+                <td style="padding:0 48px 48px 48px;font-family:{font_family};font-size:12px;line-height:125%;color:{text_color};text-align:center;">
+                    <p>{description}</p>
+                    <p>&copy; {year} <a href="{site_url}" style="color:{text_color};text-decoration:none;">{site_title}</a></p>
                 </td>
             </tr>
-            </tbody>
         </table>
     </td>
 </tr>
