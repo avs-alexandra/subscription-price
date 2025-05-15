@@ -26,9 +26,9 @@ class SubscriptionNotifications {
             return;
         }
 
-        $email_subject = get_option('reminder_email_subject', 'Ваша подписка скоро завершится');
-        $email_body_template = get_option('reminder_email_body', 'Здравствуйте, [user]! Напоминаем, что ваша подписка закончится [end_date].');
-        $email_font = get_option('email_font', 'Arial, sans-serif');
+        $email_subject = get_option('sp_reminder_email_subject', 'Ваша подписка скоро завершится');
+        $email_body_template = get_option('sp_reminder_email_body', 'Здравствуйте, [user]! Напоминаем, что ваша подписка закончится [end_date].');
+        $email_font = get_option('sp_email_font', 'Arial, sans-serif');
         $email_body = $this->generate_email_content($user, $subscription, $email_body_template, $email_font);
 
         $this->send_woocommerce_email($user->user_email, $email_subject, $email_body, $email_font);
@@ -41,9 +41,9 @@ class SubscriptionNotifications {
             return;
         }
 
-        $email_subject = get_option('expired_email_subject', 'Ваша подписка завершилась');
-        $email_body_template = get_option('expired_email_body', 'Здравствуйте, [user]! Ваша подписка завершилась.');
-        $email_font = get_option('email_font', 'Arial, sans-serif');
+        $email_subject = get_option('sp_expired_email_subject', 'Ваша подписка завершилась');
+        $email_body_template = get_option('sp_expired_email_body', 'Здравствуйте, [user]! Ваша подписка завершилась.');
+        $email_font = get_option('sp_email_font', 'Arial, sans-serif');
         $email_body = $this->generate_email_content($user, null, $email_body_template, $email_font);
 
         $this->send_woocommerce_email($user->user_email, $email_subject, $email_body, $email_font);
