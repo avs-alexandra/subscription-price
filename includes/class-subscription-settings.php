@@ -9,6 +9,39 @@ class Subscription_Settings {
         add_action('admin_enqueue_scripts', [$this, 'enqueue_wc_scripts']);
         add_action('admin_notices', [$this, 'show_admin_notices']); // Для уведомлений
     }
+    
+ public static function sp_delete_plugin_data() {
+        if (get_option('sp_delete_plugin_data') == 1) {
+            global $wpdb;
+
+            // Удаление метаполей
+            $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM {$wpdb->usermeta} WHERE meta_key = %s",
+                    'active_subscriptions'
+                )
+            );
+
+            // Удаление опций
+            $options_to_delete = [
+                'subscription_plans',
+                'subscription_role_active',
+                'subscription_role_expired',
+                'sp_reminder_email_subject',
+                'sp_reminder_email_body',
+                'sp_expired_email_subject',
+                'sp_expired_email_body',
+                'sp_email_font',
+                'sp_delete_plugin_data'
+            ];
+
+            foreach ($options_to_delete as $option) {
+                if (get_option($option)) {
+                    delete_option($option);
+                }
+            }
+        }
+    }
 
     /**
      * Подключение скриптов WooCommerce для работы wc-product-search
@@ -196,7 +229,21 @@ class Subscription_Settings {
                         </td>
                     </tr>
                 </table>
-                
+                 <!-- Чекбокс удаление метаполей перед удалением плагина -->
+                <table class="form-table">
+                    <tr valign="top">
+                        <th scope="row"><?php _e('Перед удалением плагина', 'subscription-price'); ?></th>
+                        <td>
+                            <input type="checkbox" id="sp_delete_plugin_data" name="sp_delete_plugin_data" value="1" <?php checked(get_option('sp_delete_plugin_data'), 1); ?>>
+                            <label for="sp_delete_plugin_data">
+                                <?php _e('Удалить все данные плагина при удалении', 'subscription-price'); ?>
+                            </label>
+                            <p class="description">
+                                <?php _e('Если включено, все настройки, данные и метаполя, созданные плагином, будут удалены при удалении плагина. Эта операция необратима.', 'subscription-price'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
                 <p class="submit">
                     <button type="submit" class="button-primary"><?php _e('Сохранить изменения', 'subscription-price'); ?></button>
                 </p>
@@ -212,6 +259,9 @@ class Subscription_Settings {
         if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
             return; // Проверяем nonce для безопасности
         }
+        // Сохранение значения чекбокса
+        $delete_plugin_data = isset($_POST['sp_delete_plugin_data']) ? 1 : 0;
+        update_option('sp_delete_plugin_data', $delete_plugin_data);
         // Сохраняем настройки писем
         update_option('sp_reminder_email_subject', sanitize_text_field($_POST['sp_reminder_email_subject']));
         update_option('sp_reminder_email_body', wp_kses_post($_POST['sp_reminder_email_body']));
@@ -279,3 +329,6 @@ class Subscription_Settings {
         return $formatted_roles;
     }
 }
+// Регистрация хуков
+register_uninstall_hook(__FILE__, ['Subscription_Settings', 'sp_delete_plugin_data']);
+register_deactivation_hook(__FILE__, ['Subscription_Settings', 'sp_delete_plugin_data']);
