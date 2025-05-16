@@ -37,7 +37,7 @@ class Subscription_Shortcodes {
 
         // Проверяем, завершилась ли подписка
         if (empty($subscription['end_date']) || $subscription['end_date'] < time()) {
-            return ''; // Подписка завершилась, ничего не выводим
+            return __('ваша подписка закончилась', 'subscription-price');
         }
 
         // Форматируем дату окончания подписки в формате "15.05.25"
