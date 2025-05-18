@@ -340,6 +340,5 @@ class Subscription_Settings {
         return $formatted_roles;
     }
 }
-// Регистрация хуков
-register_uninstall_hook(__FILE__, ['Subscription_Settings', 'sp_delete_plugin_data']);
-register_deactivation_hook(__FILE__, ['Subscription_Settings', 'sp_delete_plugin_data']);
+// Регистрация хуков активации и удаления — вне класса
+register_uninstall_hook(__FILE__, ['Subscription_Settings', 'delete_plugin_data']);
