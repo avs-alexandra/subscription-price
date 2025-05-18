@@ -10,7 +10,7 @@ class Subscription_Settings {
         add_action('admin_notices', [$this, 'show_admin_notices']); // Для уведомлений
     }
     
- public static function sp_delete_plugin_data() {
+ public static function delete_plugin_data() {
         if (get_option('sp_delete_plugin_data') == 1) {
             global $wpdb;
 
