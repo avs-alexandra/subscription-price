@@ -107,17 +107,18 @@ class Subscription_Settings {
                                 <label><?php printf(__('Подписка %d', 'subscription-price'), $i); ?></label>
                             </th>
                             <td>
-                                <label><?php _e('Выберите товар:', 'subscription-price'); ?></label>
-                                <select id="product_<?php echo $i; ?>" name="product_<?php echo $i; ?>" class="wc-product-search" style="width: 50%;" data-placeholder="<?php esc_attr_e('Выберите товар', 'subscription-price'); ?>" data-action="woocommerce_json_search_products_and_variations">
-                                    <?php
-                                    $product_id = get_option("subscription_{$i}_product", '');
-                                    if ($product_id) {
-                                        $product = wc_get_product($product_id);
-                                        if ($product) {
-                                            echo '<option value="' . esc_attr($product_id) . '" selected="selected">' . esc_html($product->get_name()) . '</option>';
-                                        }
+                            <label><?php _e('Выберите товар:', 'subscription-price'); ?></label>
+                            <select id="product_<?php echo $i; ?>" name="product_<?php echo $i; ?>" class="wc-product-search" style="width: 50%;" data-placeholder="<?php esc_attr_e('Выберите товар', 'subscription-price'); ?>" data-action="woocommerce_json_search_products_and_variations">
+                                <option value=""><?php _e('Не привязан', 'subscription-price'); ?></option>
+                                <?php
+                                $product_id = get_option("subscription_{$i}_product", '');
+                                if ($product_id) {
+                                    $product = wc_get_product($product_id);
+                                    if ($product) {
+                                        echo '<option value="' . esc_attr($product_id) . '" selected="selected">' . esc_html($product->get_name()) . '</option>';
                                     }
-                                    ?>
+                                }
+                                ?>
                                 </select>
                                 <br><br>
                                 <label><?php _e('Длительность подписки:', 'subscription-price'); ?></label><br>
@@ -139,8 +140,11 @@ class Subscription_Settings {
                                 </label>
                                 <label>
                                     <?php _e('Минуты:', 'subscription-price'); ?>
-                                    <input type="number" name="duration_<?php echo $i; ?>_minutes" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_minutes", 0)); ?>">
+                                   <input type="number" name="duration_<?php echo $i; ?>_minutes" min="0" style="width: 60px;" value="<?php echo esc_attr(get_option("subscription_{$i}_duration_minutes", 0)); ?>">
                                 </label>
+                                <br><br>
+                                 <!-- Кнопка для отвязки товара -->
+                            <button type="submit" name="detach_subscription_<?php echo $i; ?>" class="button-secondary" value="1"><?php _e('Отвязать товар', 'subscription-price'); ?></button>
                             </td>
                         </tr>
                     <?php endfor; ?>
@@ -258,59 +262,63 @@ class Subscription_Settings {
     /**
      * Сохранение настроек
      */
-    public function save_settings() {
-        if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
-            return; // Проверяем nonce для безопасности
-        }
-        // Сохранение значения чекбокса
-        $delete_plugin_data = isset($_POST['sp_delete_plugin_data']) ? 1 : 0;
-        update_option('sp_delete_plugin_data', $delete_plugin_data);
-        // Сохраняем настройки писем
-        update_option('sp_reminder_email_subject', sanitize_text_field($_POST['sp_reminder_email_subject']));
-        update_option('sp_reminder_email_body', wp_kses_post($_POST['sp_reminder_email_body']));
-        update_option('sp_expired_email_subject', sanitize_text_field($_POST['sp_expired_email_subject']));
-        update_option('sp_expired_email_body', wp_kses_post($_POST['sp_expired_email_body']));
-        update_option('sp_email_font', sanitize_text_field($_POST['sp_email_font']));
+   public function save_settings() {
+    if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
+        return; // Проверяем nonce для безопасности
+    }
 
-        // Сохраняем роли для активной и истекшей подписки
-        $role_active = sanitize_text_field($_POST['role_active'] ?? '');
-        $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
-
-        // Проверяем, чтобы роли активной и истекшей подписки не совпадали
-        if ($role_active === $role_expired) {
-            wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
-            exit;
+    // Сохраняем настройки подписок
+    for ($i = 1; $i <= 4; $i++) {
+        // Проверяем, была ли нажата кнопка "Отвязать товар"
+        if (isset($_POST["detach_subscription_{$i}"]) && $_POST["detach_subscription_{$i}"] == 1) {
+            delete_option("subscription_{$i}_product");
+            delete_option("subscription_{$i}_duration_years");
+            delete_option("subscription_{$i}_duration_months");
+            delete_option("subscription_{$i}_duration_days");
+            delete_option("subscription_{$i}_duration_hours");
+            delete_option("subscription_{$i}_duration_minutes");
+            continue; // Переходим к следующей подписке
         }
 
-        update_option('subscription_role_active', $role_active);
-        update_option('subscription_role_expired', $role_expired);
+        $product_id = isset($_POST["product_{$i}"]) ? absint($_POST["product_{$i}"]) : 0;
 
-        // Формируем массив всех подписок
-        $all_subscriptions = [];
-        for ($i = 1; $i <= 4; $i++) {
-            $product_id = absint($_POST["product_{$i}"] ?? 0);
-
-            if ($product_id > 0) {
-                $all_subscriptions[] = [
-                    'product_id' => $product_id,
-                    'duration' => [
-                        'years' => absint($_POST["duration_{$i}_years"] ?? 0),
-                        'months' => absint($_POST["duration_{$i}_months"] ?? 0),
-                        'days' => absint($_POST["duration_{$i}_days"] ?? 0),
-                        'hours' => absint($_POST["duration_{$i}_hours"] ?? 0),
-                        'minutes' => absint($_POST["duration_{$i}_minutes"] ?? 0),
-                    ],
-                    'role_active' => $role_active,
-                    'role_expired' => $role_expired,
-                ];
-            }
+        // Если выбран конкретный товар, сохраняем его параметры
+        if ($product_id > 0) {
+            update_option("subscription_{$i}_product", $product_id);
+            update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
+            update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
+            update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
+            update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
+            update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
         }
-        // Сохраняем массив подписок в опцию
-        update_option('subscription_plans', $all_subscriptions);
-        // Перенаправляем пользователя обратно на страницу настроек с уведомлением об успешном сохранении
-        wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
+    }
+
+    // Сохраняем другие параметры
+    $delete_plugin_data = isset($_POST['sp_delete_plugin_data']) ? 1 : 0;
+    update_option('sp_delete_plugin_data', $delete_plugin_data);
+    update_option('sp_reminder_email_subject', sanitize_text_field($_POST['sp_reminder_email_subject']));
+    update_option('sp_reminder_email_body', wp_kses_post($_POST['sp_reminder_email_body']));
+    update_option('sp_expired_email_subject', sanitize_text_field($_POST['sp_expired_email_subject']));
+    update_option('sp_expired_email_body', wp_kses_post($_POST['sp_expired_email_body']));
+    update_option('sp_email_font', sanitize_text_field($_POST['sp_email_font']));
+
+    // Сохраняем роли для активной и истекшей подписки
+    $role_active = sanitize_text_field($_POST['role_active'] ?? '');
+    $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
+
+    // Проверяем, чтобы роли активной и истекшей подписки не совпадали
+    if ($role_active === $role_expired) {
+        wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
         exit;
     }
+
+    update_option('subscription_role_active', $role_active);
+    update_option('subscription_role_expired', $role_expired);
+
+    // Перенаправляем пользователя обратно на страницу настроек с уведомлением об успешном сохранении
+    wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
+    exit;
+}
 
     /**
      * Получить список ролей
