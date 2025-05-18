@@ -92,6 +92,9 @@ class Subscription_Settings {
         ?>
         <div class="wrap">
             <h1><?php _e('Настройки Подписки', 'subscription-price'); ?></h1>
+            <p style="font-size: 14px; margin-bottom: 16px;">
+            <?php _e('Шорткод для отображения даты окончания подписки пользователя [subscription_status]', 'subscription-price'); ?>
+            </p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <?php wp_nonce_field('save_subscription_settings', 'woocommerce_subscription_nonce'); ?>
                 <input type="hidden" name="action" value="save_subscription_settings">
