@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subscription price
  * Plugin URI: https://github.com/avs-alexandra/subscription-price
- * Description: Функционал подписки для WooCommerce на основе смены ролей.
+ * Description: Subscription functionality for WooCommerce based on user role switching.
  * Version: 1.0.0
  * Author: avs-alexandra
  * Author URI: https://github.com/avs-alexandra
