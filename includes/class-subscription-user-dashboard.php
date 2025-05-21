@@ -93,32 +93,41 @@ class Subscription_User_Dashboard {
         }
     }
 
-    private function embed_inline_script() {
+     private function embed_inline_script() {
+        // Локализация сообщений для JS
+        $js_i18n = [
+            'confirm_cancel'  => __('Вы уверены, что хотите отменить подписку?', 'subscription-price'),
+            'canceling'       => __('Отмена...', 'subscription-price'),
+            'success'         => __('Задача на отмену подписки добавлена в очередь. Подписка отменится в течении 1–2 минут.', 'subscription-price'),
+            'error'           => __('Произошла ошибка. Попробуйте позже.', 'subscription-price'),
+            'button_default'  => __('Отменить подписку', 'subscription-price'),
+        ];
         echo '<script>
             jQuery(document).ready(function ($) {
+                var i18n = ' . json_encode($js_i18n, JSON_UNESCAPED_UNICODE) . ';
                 $("#cancel-subscription-button").on("click", function () {
-                    if (!confirm("Вы уверены, что хотите отменить подписку?")) {
+                    if (!confirm(i18n.confirm_cancel)) {
                         return;
                     }
                     var button = $(this);
                     var userId = button.data("user-id");
-                    button.prop("disabled", true).text("Отмена...");
+                    button.prop("disabled", true).text(i18n.canceling);
                     $.ajax({
                         url: ajaxurl,
                         method: "POST",
                         data: { action: "cancel_subscription", user_id: userId },
                         success: function (response) {
                             if (response.success) {
-                                alert("Подписка успешно отменена.");
-                                button.text("Подписка отменится в течении 1-2 минут, задача поставлена в очередь.");
+                                alert(i18n.success);
+                                button.text(i18n.success);
                             } else {
                                 alert(response.data);
-                                button.prop("disabled", false).text("Отменить подписку");
+                                button.prop("disabled", false).text(i18n.button_default);
                             }
                         },
                         error: function () {
-                            alert("Произошла ошибка. Попробуйте позже.");
-                            button.prop("disabled", false).text("Отменить подписку");
+                            alert(i18n.error);
+                            button.prop("disabled", false).text(i18n.button_default);
                         }
                     });
                 });
