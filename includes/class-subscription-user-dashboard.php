@@ -110,7 +110,7 @@ class Subscription_User_Dashboard {
                         success: function (response) {
                             if (response.success) {
                                 alert("Подписка успешно отменена.");
-                                button.text("Подписка отменена, перезагрузите страницу");
+                                button.text("Подписка отменится в течении 1-2 минут, задача поставлена в очередь.");
                             } else {
                                 alert(response.data);
                                 button.prop("disabled", false).text("Отменить подписку");
