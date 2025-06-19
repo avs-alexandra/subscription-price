@@ -30,7 +30,7 @@ class SubscriptionPrice {
         // Инициализация пользовательского интерфейса
         new Subscription_User_Dashboard();
         
-         // Инициализация шорткодов
+        // Инициализация шорткодов
         new Subscription_Shortcodes();
         
         // Отправка уведомлений о завершении подписки
@@ -48,14 +48,13 @@ class SubscriptionPrice {
      */
     public function handle_subscription_activation($order_id) {
         $order = wc_get_order($order_id);
-
         if (!$order) {
-            return; // Если заказ не найден, выходим
+            return;
         }
 
         $user_id = $order->get_user_id();
         if (!$user_id) {
-            return; // Если пользователь не найден, выходим
+            return;
         }
 
         $subscription_plans = get_option('subscription_plans', []);
@@ -63,13 +62,13 @@ class SubscriptionPrice {
         foreach ($order->get_items() as $item) {
             $product_id = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
             if (!$product_id) {
-                continue; // Пропускаем, если товар не найден
+                continue;
             }
 
             foreach ($subscription_plans as $plan) {
                 if (intval($plan['product_id']) === intval($product_id)) {
                     $this->activate_subscription($user_id, $plan, $item->get_name());
-                    break; // Прекращаем поиск, если найдено совпадение
+                    break;
                 }
             }
         }
@@ -78,57 +77,55 @@ class SubscriptionPrice {
     /**
      * Активация подписки
      */
-   private function activate_subscription($user_id, $plan, $product_name) {
-    if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
-        return; // Если пользователь или роли не указаны, выходим
-    }
-
-    $user = get_userdata($user_id);
-    if ($user) {
-        if (in_array($plan['role_expired'], $user->roles, true)) {
-            $user->remove_role($plan['role_expired']);
-            $user->add_role($plan['role_active']);
+    private function activate_subscription($user_id, $plan, $product_name) {
+        if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
+            return;
         }
 
-        delete_user_meta($user_id, 'active_subscriptions');
+        $user = get_userdata($user_id);
+        if ($user) {
+            if (in_array($plan['role_expired'], $user->roles, true)) {
+                $user->remove_role($plan['role_expired']);
+                $user->add_role($plan['role_active']);
+            } else {
+                if (!in_array($plan['role_active'], $user->roles, true)) {
+                    $user->add_role($plan['role_active']);
+                }
+            }
 
-        $current_time = time();
-        $duration = $this->calculate_duration($plan['duration']);
+            delete_user_meta($user_id, 'active_subscriptions');
 
-        $new_subscription = [
-            'id' => $current_time, // Уникальный ID подписки
-            'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
-            'start_date' => $current_time, // Текущая дата как дата начала
-            'end_date' => $current_time + $duration, // Дата окончания
-        ];
+            $current_time = time();
+            $end_date = $this->calculate_end_date($current_time, $plan['duration']);
 
-        update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
+            $new_subscription = [
+                'id' => $current_time,
+                'name' => "{$product_name} - {$plan['duration']['months']} месяц(ев)",
+                'start_date' => $current_time,
+                'end_date' => $end_date,
+            ];
 
-        // Планируем завершение подписки через Action Scheduler
-        if ($duration) {
-            // Запланировать уведомление за 3 дня до завершения
-            as_schedule_single_action(
-                $new_subscription['end_date'] - 3 * DAY_IN_SECONDS,
-                'subscription_notification_reminder',
-                ['user_id' => $user_id]
-            );
+            update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
 
-            // Запланировать уведомление о завершении подписки
-            as_schedule_single_action(
-                $new_subscription['end_date'],
-                'subscription_notification_expired',
-                ['user_id' => $user_id]
-            );
-
-            // Запланировать завершение подписки
-            as_schedule_single_action(
-                $new_subscription['end_date'],
-                'handle_subscription_expiration',
-                ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
-            );
+            if ($end_date) {
+                as_schedule_single_action(
+                    $end_date - 3 * DAY_IN_SECONDS,
+                    'subscription_notification_reminder',
+                    ['user_id' => $user_id]
+                );
+                as_schedule_single_action(
+                    $end_date,
+                    'subscription_notification_expired',
+                    ['user_id' => $user_id]
+                );
+                as_schedule_single_action(
+                    $end_date,
+                    'handle_subscription_expiration',
+                    ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
+                );
+            }
         }
     }
-}
 
     /**
      * Обработка завершения подписки
@@ -141,7 +138,7 @@ class SubscriptionPrice {
         $active_role = get_option('subscription_role_active', '');
 
         if (!$user_id || empty($expired_role) || empty($active_role)) {
-            return; // Если данные отсутствуют, выходим
+            return;
         }
 
         $user = get_userdata($user_id);
@@ -150,39 +147,39 @@ class SubscriptionPrice {
                 $user->remove_role($active_role);
                 $user->add_role($expired_role);
             }
-
             delete_user_meta($user_id, 'active_subscriptions');
         }
     }
 
     /**
-     * Рассчитать длительность подписки в секундах
+     * Рассчитать дату окончания подписки (универсально)
      */
-    private function calculate_duration($duration) {
-        $total_seconds = 0;
-
-        $current_date = new DateTime();
+    private function calculate_end_date($start_time, $duration) {
+        $date = new DateTime();
+        $date->setTimestamp($start_time);
 
         if (isset($duration['years']) && $duration['years'] > 0) {
-            $current_date->modify('+' . $duration['years'] . ' years');
+            $date->modify('+' . intval($duration['years']) . ' years');
         }
         if (isset($duration['months']) && $duration['months'] > 0) {
-            $current_date->modify('+' . $duration['months'] . ' months');
+            $date->modify('+' . intval($duration['months']) . ' months');
         }
+
+        $seconds = 0;
         if (isset($duration['days']) && $duration['days'] > 0) {
-            $total_seconds += $duration['days'] * DAY_IN_SECONDS;
+            $seconds += intval($duration['days']) * DAY_IN_SECONDS;
         }
         if (isset($duration['hours']) && $duration['hours'] > 0) {
-            $total_seconds += $duration['hours'] * HOUR_IN_SECONDS;
+            $seconds += intval($duration['hours']) * HOUR_IN_SECONDS;
         }
         if (isset($duration['minutes']) && $duration['minutes'] > 0) {
-            $total_seconds += $duration['minutes'] * MINUTE_IN_SECONDS;
+            $seconds += intval($duration['minutes']) * MINUTE_IN_SECONDS;
+        }
+        if ($seconds > 0) {
+            $date->modify("+$seconds seconds");
         }
 
-        $end_date = $current_date->getTimestamp();
-        $total_seconds += $end_date - time();
-
-        return $total_seconds;
+        return $date->getTimestamp();
     }
 }
 
