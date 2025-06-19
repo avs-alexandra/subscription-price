@@ -9,6 +9,7 @@ class Subscription_Settings {
         add_action('admin_enqueue_scripts', [$this, 'enqueue_wc_scripts']);
         add_action('admin_notices', [$this, 'show_admin_notices']); // Для уведомлений
     }
+
     /**
      * Подключение скриптов WooCommerce для работы wc-product-search
      */
@@ -213,61 +214,82 @@ class Subscription_Settings {
     /**
      * Сохранение настроек
      */
-   public function save_settings() {
-    if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
-        return; // Проверяем nonce для безопасности
-    }
-
-    // Сохраняем настройки подписок
-    for ($i = 1; $i <= 4; $i++) {
-        // Проверяем, была ли нажата кнопка "Отвязать товар"
-        if (isset($_POST["detach_subscription_{$i}"]) && $_POST["detach_subscription_{$i}"] == 1) {
-            delete_option("subscription_{$i}_product");
-            delete_option("subscription_{$i}_duration_years");
-            delete_option("subscription_{$i}_duration_months");
-            delete_option("subscription_{$i}_duration_days");
-            delete_option("subscription_{$i}_duration_hours");
-            delete_option("subscription_{$i}_duration_minutes");
-            continue; // Переходим к следующей подписке
+    public function save_settings() {
+        if (!isset($_POST['woocommerce_subscription_nonce']) || !wp_verify_nonce($_POST['woocommerce_subscription_nonce'], 'save_subscription_settings')) {
+            return; // Проверяем nonce для безопасности
         }
 
-        $product_id = isset($_POST["product_{$i}"]) ? absint($_POST["product_{$i}"]) : 0;
+        // Сохраняем настройки подписок
+        for ($i = 1; $i <= 4; $i++) {
+            // Проверяем, была ли нажата кнопка "Отвязать товар"
+            if (isset($_POST["detach_subscription_{$i}"]) && $_POST["detach_subscription_{$i}"] == 1) {
+                delete_option("subscription_{$i}_product");
+                delete_option("subscription_{$i}_duration_years");
+                delete_option("subscription_{$i}_duration_months");
+                delete_option("subscription_{$i}_duration_days");
+                delete_option("subscription_{$i}_duration_hours");
+                delete_option("subscription_{$i}_duration_minutes");
+                continue; // Переходим к следующей подписке
+            }
 
-        // Если выбран конкретный товар, сохраняем его параметры
-        if ($product_id > 0) {
-            update_option("subscription_{$i}_product", $product_id);
-            update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
-            update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
-            update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
-            update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
-            update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
+            $product_id = isset($_POST["product_{$i}"]) ? absint($_POST["product_{$i}"]) : 0;
+
+            // Если выбран конкретный товар, сохраняем его параметры
+            if ($product_id > 0) {
+                update_option("subscription_{$i}_product", $product_id);
+                update_option("subscription_{$i}_duration_years", absint($_POST["duration_{$i}_years"] ?? 0));
+                update_option("subscription_{$i}_duration_months", absint($_POST["duration_{$i}_months"] ?? 0));
+                update_option("subscription_{$i}_duration_days", absint($_POST["duration_{$i}_days"] ?? 0));
+                update_option("subscription_{$i}_duration_hours", absint($_POST["duration_{$i}_hours"] ?? 0));
+                update_option("subscription_{$i}_duration_minutes", absint($_POST["duration_{$i}_minutes"] ?? 0));
+            }
         }
-    }
 
-    // Сохраняем другие параметры
-    update_option('sp_reminder_email_subject', sanitize_text_field($_POST['sp_reminder_email_subject']));
-    update_option('sp_reminder_email_body', wp_kses_post($_POST['sp_reminder_email_body']));
-    update_option('sp_expired_email_subject', sanitize_text_field($_POST['sp_expired_email_subject']));
-    update_option('sp_expired_email_body', wp_kses_post($_POST['sp_expired_email_body']));
-    update_option('sp_email_font', sanitize_text_field($_POST['sp_email_font']));
+        // Собираем subscription_plans в ОДИН МАССИВ ДЛЯ ФРОНТА/ХУКОВ
+        $subscription_plans = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $product_id = get_option("subscription_{$i}_product");
+            if ($product_id) {
+                $subscription_plans[] = [
+                    'product_id' => $product_id,
+                    'duration' => [
+                        'years'   => get_option("subscription_{$i}_duration_years", 0),
+                        'months'  => get_option("subscription_{$i}_duration_months", 0),
+                        'days'    => get_option("subscription_{$i}_duration_days", 0),
+                        'hours'   => get_option("subscription_{$i}_duration_hours", 0),
+                        'minutes' => get_option("subscription_{$i}_duration_minutes", 0),
+                    ],
+                    'role_active'  => get_option('subscription_role_active'),
+                    'role_expired' => get_option('subscription_role_expired'),
+                ];
+            }
+        }
+        update_option('subscription_plans', $subscription_plans);
 
-    // Сохраняем роли для активной и истекшей подписки
-    $role_active = sanitize_text_field($_POST['role_active'] ?? '');
-    $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
+        // Сохраняем другие параметры
+        update_option('sp_reminder_email_subject', sanitize_text_field($_POST['sp_reminder_email_subject']));
+        update_option('sp_reminder_email_body', wp_kses_post($_POST['sp_reminder_email_body']));
+        update_option('sp_expired_email_subject', sanitize_text_field($_POST['sp_expired_email_subject']));
+        update_option('sp_expired_email_body', wp_kses_post($_POST['sp_expired_email_body']));
+        update_option('sp_email_font', sanitize_text_field($_POST['sp_email_font']));
 
-    // Проверяем, чтобы роли активной и истекшей подписки не совпадали
-    if ($role_active === $role_expired) {
-        wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
+        // Сохраняем роли для активной и истекшей подписки
+        $role_active = sanitize_text_field($_POST['role_active'] ?? '');
+        $role_expired = sanitize_text_field($_POST['role_expired'] ?? '');
+
+        // Проверяем, чтобы роли активной и истекшей подписки не совпадали
+        if ($role_active === $role_expired) {
+            wp_redirect(admin_url('admin.php?page=subscription-settings&message=error_roles'));
+            exit;
+        }
+
+        update_option('subscription_role_active', $role_active);
+        update_option('subscription_role_expired', $role_expired);
+
+        // Перенаправляем пользователя обратно на страницу настроек с уведомлением об успешном сохранении
+        wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
         exit;
     }
-
-    update_option('subscription_role_active', $role_active);
-    update_option('subscription_role_expired', $role_expired);
-
-    // Перенаправляем пользователя обратно на страницу настроек с уведомлением об успешном сохранении
-    wp_redirect(admin_url('admin.php?page=subscription-settings&settings-updated=true'));
-    exit;
-}
 
     /**
      * Получить список ролей
