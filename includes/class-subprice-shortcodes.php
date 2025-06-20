@@ -3,16 +3,16 @@ if (!defined('ABSPATH')) {
     exit; // Запрет прямого доступа
 }
 
-class Subscription_Shortcodes {
+class Subprice_Shortcodes {
     public function __construct() {
-        // Регистрация шорткодов
-        add_shortcode('subscription_status', [$this, 'render_subscription_status']);
+        // Регистрация шорткода
+        add_shortcode('subprice_status', [$this, 'subprice_render_status']);
     }
 
     /**
      * Рендеринг даты окончания подписки для текущего пользователя
      */
-    public function render_subscription_status($atts) {
+    public function subprice_render_status($atts) {
         // Проверяем, активен ли плагин WooCommerce (или ваш плагин, если есть специфическое условие)
         if (!class_exists('WooCommerce')) {
             return ''; // WooCommerce не активен, ничего не выводим
@@ -26,7 +26,7 @@ class Subscription_Shortcodes {
         }
 
         // Получаем активные подписки пользователя
-        $active_subscriptions = get_user_meta($current_user->ID, 'active_subscriptions', true);
+        $active_subscriptions = get_user_meta($current_user->ID, 'subprice_active_subscriptions', true);
 
         if (empty($active_subscriptions)) {
             return ''; // Подписок нет, ничего не выводим
