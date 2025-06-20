@@ -17,36 +17,36 @@ if (!defined('ABSPATH')) {
 }
 
 // Подключаем файлы классов
-require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-settings.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-user-dashboard.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-shortcodes.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-subscription-notifications.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subprice-settings.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subprice-user-dashboard.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subprice-shortcodes.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-subprice-notifications.php';
 
-class SubscriptionPrice {
+class Subprice_Plugin {
     public function __construct() {
         // Инициализация настроек
-        new Subscription_Settings();
+        new Subprice_Settings();
 
         // Инициализация пользовательского интерфейса
-        new Subscription_User_Dashboard();
+        new Subprice_User_Dashboard();
         
         // Инициализация шорткодов
-        new Subscription_Shortcodes();
+        new Subprice_Shortcodes();
         
         // Отправка уведомлений о завершении подписки
-        new SubscriptionNotifications();
+        new Subprice_Notifications();
 
         // Обработка активации подписки при покупке
-        add_action('woocommerce_order_status_completed', [$this, 'handle_subscription_activation']);
+        add_action('woocommerce_order_status_completed', [$this, 'subprice_handle_subscription_activation']);
 
         // Регистрация обработчика завершения подписки (через Action Scheduler)
-        add_action('handle_subscription_expiration', [$this, 'handle_subscription_expiration']);
+        add_action('subprice_handle_subscription_expiration', [$this, 'subprice_handle_subscription_expiration']);
     }
 
     /**
      * Обработка завершения заказа для активации подписки
      */
-    public function handle_subscription_activation($order_id) {
+    public function subprice_handle_subscription_activation($order_id) {
         $order = wc_get_order($order_id);
         if (!$order) {
             return;
@@ -57,7 +57,7 @@ class SubscriptionPrice {
             return;
         }
 
-        $subscription_plans = get_option('subscription_plans', []);
+        $subscription_plans = get_option('subprice_subscription_plans', []);
 
         foreach ($order->get_items() as $item) {
             $product_id = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
@@ -67,7 +67,7 @@ class SubscriptionPrice {
 
             foreach ($subscription_plans as $plan) {
                 if (intval($plan['product_id']) === intval($product_id)) {
-                    $this->activate_subscription($user_id, $plan, $item->get_name());
+                    $this->subprice_activate_subscription($user_id, $plan, $item->get_name());
                     break;
                 }
             }
@@ -77,7 +77,7 @@ class SubscriptionPrice {
     /**
      * Активация подписки
      */
-    private function activate_subscription($user_id, $plan, $product_name) {
+    private function subprice_activate_subscription($user_id, $plan, $product_name) {
         if (!$user_id || empty($plan['role_active']) || empty($plan['role_expired'])) {
             return;
         }
@@ -93,10 +93,10 @@ class SubscriptionPrice {
                 }
             }
 
-            delete_user_meta($user_id, 'active_subscriptions');
+            delete_user_meta($user_id, 'subprice_active_subscriptions');
 
             $current_time = time();
-            $end_date = $this->calculate_end_date($current_time, $plan['duration']);
+            $end_date = $this->subprice_calculate_end_date($current_time, $plan['duration']);
 
             $new_subscription = [
                 'id' => $current_time,
@@ -105,22 +105,22 @@ class SubscriptionPrice {
                 'end_date' => $end_date,
             ];
 
-            update_user_meta($user_id, 'active_subscriptions', [$new_subscription]);
+            update_user_meta($user_id, 'subprice_active_subscriptions', [$new_subscription]);
 
             if ($end_date) {
                 as_schedule_single_action(
                     $end_date - 3 * DAY_IN_SECONDS,
-                    'subscription_notification_reminder',
+                    'subprice_subscription_notification_reminder',
                     ['user_id' => $user_id]
                 );
                 as_schedule_single_action(
                     $end_date,
-                    'subscription_notification_expired',
+                    'subprice_subscription_notification_expired',
                     ['user_id' => $user_id]
                 );
                 as_schedule_single_action(
                     $end_date,
-                    'handle_subscription_expiration',
+                    'subprice_handle_subscription_expiration',
                     ['user_id' => $user_id, 'expired_role' => $plan['role_expired']]
                 );
             }
@@ -130,12 +130,12 @@ class SubscriptionPrice {
     /**
      * Обработка завершения подписки
      */
-    public function handle_subscription_expiration($user_id, $expired_role = '') {
+    public function subprice_handle_subscription_expiration($user_id, $expired_role = '') {
         if (empty($expired_role)) {
-            $expired_role = get_option('subscription_role_expired', '');
+            $expired_role = get_option('subprice_subscription_role_expired', '');
         }
 
-        $active_role = get_option('subscription_role_active', '');
+        $active_role = get_option('subprice_subscription_role_active', '');
 
         if (!$user_id || empty($expired_role) || empty($active_role)) {
             return;
@@ -147,14 +147,14 @@ class SubscriptionPrice {
                 $user->remove_role($active_role);
                 $user->add_role($expired_role);
             }
-            delete_user_meta($user_id, 'active_subscriptions');
+            delete_user_meta($user_id, 'subprice_active_subscriptions');
         }
     }
 
     /**
      * Рассчитать дату окончания подписки (универсально)
      */
-    private function calculate_end_date($start_time, $duration) {
+    private function subprice_calculate_end_date($start_time, $duration) {
         $date = new DateTime();
         $date->setTimestamp($start_time);
 
@@ -184,4 +184,4 @@ class SubscriptionPrice {
 }
 
 // Инициализируем плагин
-new SubscriptionPrice();
+new Subprice_Plugin();
