@@ -1,20 +1,20 @@
 <?php
 if (!defined('ABSPATH')) exit; // Запрет прямого доступа
 
-class SubscriptionNotifications {
+class Subprice_Notifications {
     public function __construct() {
-        add_action('subscription_notification_reminder', [$this, 'send_reminder_email']);
-        add_action('subscription_notification_expired', [$this, 'send_expired_email']);
+        add_action('subprice_subscription_notification_reminder', [$this, 'subprice_send_reminder_email']);
+        add_action('subprice_subscription_notification_expired', [$this, 'subprice_send_expired_email']);
     }
 
-    public function send_reminder_email($user_id) {
+    public function subprice_send_reminder_email($user_id) {
         $user = get_userdata($user_id);
 
         if (!$user || empty($user->user_email)) {
             return;
         }
 
-        $active_subscriptions = get_user_meta($user_id, 'active_subscriptions', true);
+        $active_subscriptions = get_user_meta($user_id, 'subprice_active_subscriptions', true);
 
         if (empty($active_subscriptions)) {
             return;
@@ -26,30 +26,30 @@ class SubscriptionNotifications {
             return;
         }
 
-        $email_subject = get_option('sp_reminder_email_subject', 'Ваша подписка скоро завершится');
-        $email_body_template = get_option('sp_reminder_email_body', 'Здравствуйте, [user]! Напоминаем, что ваша подписка закончится [end_date].');
-        $email_font = get_option('sp_email_font', 'Arial, sans-serif');
-        $email_body = $this->generate_email_content($user, $subscription, $email_body_template, $email_font);
+        $email_subject = get_option('subprice_reminder_email_subject', 'Ваша подписка скоро завершится');
+        $email_body_template = get_option('subprice_reminder_email_body', 'Здравствуйте, [user]! Напоминаем, что ваша подписка закончится [end_date].');
+        $email_font = get_option('subprice_email_font', 'Arial, sans-serif');
+        $email_body = $this->subprice_generate_email_content($user, $subscription, $email_body_template, $email_font);
 
-        $this->send_woocommerce_email($user->user_email, $email_subject, $email_body, $email_font);
+        $this->subprice_send_woocommerce_email($user->user_email, $email_subject, $email_body, $email_font);
     }
 
-    public function send_expired_email($user_id) {
+    public function subprice_send_expired_email($user_id) {
         $user = get_userdata($user_id);
 
         if (!$user || empty($user->user_email)) {
             return;
         }
 
-        $email_subject = get_option('sp_expired_email_subject', 'Ваша подписка завершилась');
-        $email_body_template = get_option('sp_expired_email_body', 'Здравствуйте, [user]! Ваша подписка завершилась.');
-        $email_font = get_option('sp_email_font', 'Arial, sans-serif');
-        $email_body = $this->generate_email_content($user, null, $email_body_template, $email_font);
+        $email_subject = get_option('subprice_expired_email_subject', 'Ваша подписка завершилась');
+        $email_body_template = get_option('subprice_expired_email_body', 'Здравствуйте, [user]! Ваша подписка завершилась.');
+        $email_font = get_option('subprice_email_font', 'Arial, sans-serif');
+        $email_body = $this->subprice_generate_email_content($user, null, $email_body_template, $email_font);
 
-        $this->send_woocommerce_email($user->user_email, $email_subject, $email_body, $email_font);
+        $this->subprice_send_woocommerce_email($user->user_email, $email_subject, $email_body, $email_font);
     }
 
-    private function generate_email_content($user, $subscription, $body_template, $font) {
+    private function subprice_generate_email_content($user, $subscription, $body_template, $font) {
         $placeholders = [
             '[user]' => esc_html($user->display_name),
             '[end_date]' => $subscription ? esc_html(date_i18n('d.m.y', $subscription['end_date'])) : '',
@@ -60,7 +60,7 @@ class SubscriptionNotifications {
         return '<tr><td style="font-family: ' . esc_attr($font) . '; padding: 40px; font-size: 15px;">' . wpautop($email_body) . '</td></tr>';
     }
 
-    private function send_woocommerce_email($recipient, $subject, $message, $font) {
+    private function subprice_send_woocommerce_email($recipient, $subject, $message, $font) {
         $header_template = plugin_dir_path(__FILE__) . '../templates/email_header.php';
         $footer_template = plugin_dir_path(__FILE__) . '../templates/email_footer.php';
 
@@ -88,7 +88,7 @@ class SubscriptionNotifications {
             '{description}' => get_option('woocommerce_email_footer_text', __("Спасибо за использование нашего сервиса!", "subscription-price")),
             '{site_title}' => get_bloginfo('name'),
             '{site_url}' => home_url(),
-            '{year}' => date('Y'),
+            '{year}' => gmdate('Y'),
             '{font_family}' => esc_attr($font),
         ]);
 
