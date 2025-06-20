@@ -1,4 +1,4 @@
-=== Brand Ambassador ===
+=== Subscription price ===
 Contributors: avs-alexandra
 Tags: subscription, WooCommerce, roles, notifications 
 Requires at least: 5.0
@@ -50,7 +50,7 @@ Manage subscriptions in WooCommerce by changing user roles and sending notificat
 * Первый выпуск.
 * Управление подписками с изменением ролей.
 * Уведомления о напоминаниях и истечении подписки.
-* Шорткод `[subscription_status]` для отображения даты окончания подписки.
+* Шорткод `[subprice_status]` для отображения даты окончания подписки.
 
 == Upgrade Notice ==
 = 1.0.0 =
